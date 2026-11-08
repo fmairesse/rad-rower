@@ -9,8 +9,10 @@ Sport RL via Bluetooth LE.
 
 ## Etape actuelle
 
-Analyser une capture BTSnoop d’une session iFit sur Android, puis corréler les
-échanges observés aux actions de l’utilisateur avant toute expérience active.
+Analyser les notifications reçues sous Linux après la séquence capturée `08`
+puis `0b`. La paire `0b` produit trois notifications attendues et une
+notification supplémentaire, mais la connexion est terminée par le rameur
+environ 10 s plus tard.
 
 ## Acquis verifies
 
@@ -36,13 +38,12 @@ Analyser une capture BTSnoop d’une session iFit sur Android, puis corréler le
   Les payloads sont candidats seulement ; leur sémantique n’est pas décodée.
 - `bleak/main.py` s’abonne maintenant aux notifications de la caractéristique
   `00001535-1412-efde-1523-785feabcd123` et affiche leur heure locale et les
-  octets bruts en hexadécimal. Après confirmation `y`, il envoie jusqu’à trois
-  paires `08`, en attendant un burst de trois notifications avant chaque paire
-  suivante ; le troisième échange attend deux notifications. Essai réel : le
-  troisième échange produit deux notifications, puis le rameur termine la
-  liaison (raison HCI `0x13`) environ 10 s plus tard, sans autre Write Request.
-  Dans les captures iFit, l’échange suivant est la paire `0b`, pas encore
-  ajoutée au script.
+  octets bruts en hexadécimal. Après confirmation `y`, il envoie les paires
+  d’initialisation `08`, puis la paire `0b` seulement si les deux notifications
+  du troisième échange `08` arrivent et que la liaison reste active. Lors de
+  l’essai du 2026-11-08, la paire `0b` a déclenché trois notifications, puis
+  une quatrième environ 45 ms plus tard. Le rameur a néanmoins coupé la
+  liaison (raison HCI `0x13`) environ 10 s après cette dernière notification.
 - La capture montre des écritures répétées vers la caractéristique `0x000e`
   et des notifications sur `0x000b`. La signification des payloads et leur
   correspondance avec les actions de la session restent inconnues.
@@ -64,10 +65,10 @@ Aucun blocage constaté à ce stade ; l’environnement BLE reste à vérifier.
 
 ## Prochaine étape
 
-Après accord explicite, tester uniquement la paire `0b` observée dans iFit
-après les deux notifications du troisième échange `08`. Vérifier si elle
-déclenche un nouveau burst ou prolonge la liaison ; ne pas envoyer la paire
-`0a`.
+Analyser le contenu des notifications observées après `0b` sans leur attribuer
+de sémantique non vérifiée. La paire `0b` produit bien le burst attendu, mais
+n’empêche pas la déconnexion distante après environ 10 s. Ne pas envoyer la
+paire `0a` sans capture correspondante et accord explicite.
 
 ## Documents associés
 

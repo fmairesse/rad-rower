@@ -17,6 +17,10 @@ THIRD_EXCHANGE_WRITES = (
     bytes.fromhex("fe020802"),
     bytes.fromhex("ff0802040204140488a000000000000000000000"),
 )
+STREAM_EXCHANGE_WRITES = (
+    bytes.fromhex("fe020b02"),
+    bytes.fromhex("ff0b020402070207820000008b00000000000000"),
+)
 
 
 def handle_notification(sender, data):
@@ -83,7 +87,7 @@ async def main():
 
         answer = await asyncio.to_thread(
             input,
-            "Send the captured initialization and two follow-up pairs? [y/N]: ",
+            "Send the captured initialization, follow-up, and 0b exchanges? [y/N]: ",
         )
         if answer.strip().lower() == "y":
             for payload in INITIALIZATION_WRITES:
@@ -110,11 +114,22 @@ async def main():
                             payload,
                             response=True,
                         )
-                    await wait_for_notification_burst(
+                    if await wait_for_notification_burst(
                         notification_queue,
                         "third exchange",
                         expected_count=2,
-                    )
+                    ) and client.is_connected:
+                        for payload in STREAM_EXCHANGE_WRITES:
+                            print(f"Sending 0b-exchange payload: {payload.hex(' ')}")
+                            await client.write_gatt_char(
+                                command_characteristic,
+                                payload,
+                                response=True,
+                            )
+                        await wait_for_notification_burst(
+                            notification_queue,
+                            "0b exchange",
+                        )
         else:
             print("Initialization and follow-up writes skipped; listening passively.")
 

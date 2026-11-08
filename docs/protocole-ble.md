@@ -240,14 +240,16 @@ identique :
 | 4e échange | `fe020b02` | `ff0b020402070207820000008b00000000000000` |
 | 5e échange | `fe020a02` | `ff0a0204020602068400008c00000000000000` |
 
-Chaque paire est suivie d’un autre burst de notifications sur `0x000b`. Ces
+Les échanges `08` sont suivis d’un burst de notifications sur `0x000b`. Ces
 payloads sont des candidats capturés chez iFit, pas des commandes décodées.
-trois autres notifications. Toutes les écritures utilisent `response=True`.
+Toutes les écritures du script utilisent `response=True`.
 Après confirmation `y`, `bleak/main.py` envoie la paire initiale, attend trois
 notifications en 3 secondes, puis envoie les deuxième et troisième paires
 `08`, chacune seulement après le burst de trois notifications précédent.
-Toutes les écritures utilisent `response=True`. Les paires `0b` et `0a` ne
-sont pas envoyées par le script.
+Le troisième échange produit deux notifications ; le script attend donc deux
+notifications à cette étape, puis envoie la paire `0b` si la liaison reste
+active. Il attend ensuite trois notifications pendant au plus 3 secondes.
+La paire `0a` reste exclue.
 
 Essai réel de cette séquence : les deux paires `08` ont chacune été suivies
 d’un burst de trois notifications. La seconde paire est envoyée à
@@ -265,8 +267,34 @@ termine la liaison avec la raison HCI `0x13` environ 10 s après les deux
 notifications. Le script attend désormais deux notifications pour le
 troisième échange afin de refléter l’observation.
 
-La paire `0b` est le prochain candidat à tester, après accord explicite. Elle
-n’est pas encore envoyée par le script.
+Essai réel de la séquence complète avec `0b` le 2026-11-08 : les trois
+échanges `08` ont reproduit les bursts déjà observés (3, 3 et 2 notifications).
+Le script a ensuite envoyé la paire `0b` à `32.640119` dans le temps btmon ;
+les deux Write Requests ont reçu une réponse ATT. Trois notifications arrivent
+sur `0x000b` à `32.817054`, `32.817055` et `32.819308` :
+
+| Payload de notification | Temps btmon |
+| --- | ---: |
+| `fe022504020d140d880209829083718984955c40` | `32.817054` |
+| `00120104022114218202640001f9bb00005cad06` | `32.817055` |
+| `01120053002de8030024f400f401010001020000` | `32.819308` |
+| `ff015d53002de8030024f400f401010001020000` | `32.862029` |
+
+Le script rapporte les trois premières comme le burst `0b`. Une quatrième
+notification, listée ci-dessus, arrive environ 45 ms après le troisième
+élément ; aucune nouvelle écriture ATT ne la précède. Le rameur termine la
+liaison à `42.851363` avec la raison HCI `0x13` (`Remote User Terminated
+Connection`), soit environ 9.99 s après cette quatrième notification. Le
+dernier paquet ATT observé avant la déconnexion est cette notification ; aucun
+autre Write Request n’est envoyé après la paire `0b`.
+
+Observation : la paire `0b` est suivie des trois notifications attendues, mais
+ne maintient pas la connexion au-delà du délai d’environ 10 s déjà observé
+après les échanges `08`. La notification supplémentaire ne change pas cette
+conclusion. La raison HCI établit que le pair distant termine la liaison, mais
+ne révèle pas la cause applicative. La signification des payloads reste
+inconnue ; ne pas ajouter ni envoyer la paire `0a` sans nouvelle capture et
+accord explicite.
 
 ## Règles de consignation
 
