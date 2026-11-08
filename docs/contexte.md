@@ -34,6 +34,13 @@ Analyser une capture BTSnoop d’une session iFit sur Android, puis corréler le
 - Une capture ciblée `bugreport/btsnoop_hci-start.log` associe plus
   précisément le même couple d’écritures aux actions start/stop/end d’iFit.
   Les payloads sont candidats seulement ; leur sémantique n’est pas décodée.
+- `bleak/main.py` s’abonne maintenant aux notifications de la caractéristique
+  `00001535-1412-efde-1523-785feabcd123` et affiche leur heure locale et les
+  octets bruts en hexadécimal. Après confirmation `y`, il envoie aussi la
+  première paire d’écritures d’initialisation capturée sur `0x000e`. Ce code
+  compile ; un essai a allumé brièvement le voyant iFit et reçu trois
+  notifications, puis le voyant s’est éteint alors que la liaison BLE est
+  restée active quelques secondes. La cause n’est pas établie.
 - La capture montre des écritures répétées vers la caractéristique `0x000e`
   et des notifications sur `0x000b`. La signification des payloads et leur
   correspondance avec les actions de la session restent inconnues.
@@ -55,9 +62,9 @@ Aucun blocage constaté à ce stade ; l’environnement BLE reste à vérifier.
 
 ## Prochaine étape
 
-Décoder les champs du couple d’écritures `fe 02 0d 02` / `ff 0d ...` et les
-notifications de la caractéristique `0x000b`. Ne pas rejouer de commandes au
-rameur sans accord explicite et protocole de test convenu.
+Déterminer si la connexion BLE reste active après l’extinction du voyant et
+analyser la suite des échanges d’initialisation iFit. Ne pas ajouter ni envoyer
+d’autres payloads sans accord explicite.
 
 ## Documents associés
 

@@ -175,6 +175,62 @@ révèle pas encore la sémantique du couple ni celle des champs qui changent
 entre les payloads. Ne pas rejouer ces écritures sans accord explicite et
 protocole de test convenu.
 
+## Notifications avant le démarrage de session
+
+Dans les deux captures iFit, le client active les notifications en écrivant
+`01 00` au CCCD du handle `0x000c`, puis reçoit déjà des notifications sur le
+handle valeur `0x000b` avant l’action start notée :
+
+| Capture | Ecriture CCCD | Première notification | Notifications avant start |
+| --- | --- | --- | ---: |
+| `btsnoop_hci-202611081036.log` | `10:36:19.064` | `10:36:19.518` | 139 |
+| `btsnoop_hci-start.log` | `15:45:28.103` | `15:45:28.497` | 259 |
+
+Cela montre que la commande start n’est pas nécessaire pour recevoir au moins
+les notifications de base de `0x000b`. Cela ne permet pas de conclure que les
+métriques de rame sont émises avant start : leur décodage reste à faire.
+
+Le script `bleak/main.py` appelle `BleakClient.start_notify()` sur la
+caractéristique `00001535-1412-efde-1523-785feabcd123`, ce qui configure le
+CCCD. Dans les deux captures, après la réponse à l’écriture CCCD, iFit envoie une écriture
+`fe 02 08 02` au handle `0x000e`, puis une écriture de 20 octets commençant
+par `ff 08`. La première notification suit cette séquence :
+
+| Capture | Ecriture CCCD | `fe 02 08 02` | Ecriture `ff 08 ...` | Première notification |
+| --- | --- | --- | --- | --- |
+| `btsnoop_hci-202611081036.log` | `10:36:19.064` | `10:36:19.292` | `10:36:19.436` | `10:36:19.518` |
+| `btsnoop_hci-start.log` | `15:45:28.103` | `15:45:28.334` | `15:45:28.411` | `15:45:28.497` |
+
+Cette séquence est un candidat d’initialisation du flux, et non une preuve
+qu’il faut démarrer l’entraînement pour recevoir des notifications. Le script
+envoie maintenant la première paire capturée (`fe020802` puis
+`ff08020402040204818700000000000000000000`) après `start_notify()`, et
+seulement après une confirmation `y` à l’exécution. Ces ATT Write Requests
+utilisent `response=True`. Le sens de la paire reste inconnu, et les écritures
+`ff 08 ...` suivantes d’iFit contiennent des valeurs différentes qui ne sont
+pas incluses dans le script.
+
+Essai manuel du script : après confirmation des deux écritures, l’utilisateur
+observe l’allumage du voyant iFit, reçoit trois notifications, puis voit le
+voyant s’éteindre. Les notifications reçues étaient :
+
+```text
+fe022103c3fcffca14e707b8c0d3f81997000f9c
+00120104021d141d810253010300000000000f9c
+ff0ffefdc3fcffca14e707b8c0d3f81997000f9c
+```
+
+Les deux dernières correspondent exactement à deux notifications du premier
+burst iFit capturé. Dans les captures iFit, ce burst est suivi d’autres
+échanges : deux nouvelles paires `fe 02 08 02` / `ff 08 ...`, puis des paires
+commençant par `fe 02 0b 02` / `ff 0b ...` et `fe 02 0a 02` / `ff 0a ...`.
+La liaison BLE est restée active quelques secondes après l’extinction du
+voyant, selon l’utilisateur. Cela rend plausible que le premier couple amorce
+la communication sans suffire à maintenir l’état iFit, ou que le voyant
+indique un état applicatif distinct de la liaison BLE. La cause n’est pas
+établie. Les captures iFit montrent des échanges supplémentaires, mais leurs
+payloads varient et ne sont pas ajoutés au script sans examen séparé.
+
 ## Règles de consignation
 
 - Séparer les observations brutes de leur interprétation.
