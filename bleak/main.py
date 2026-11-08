@@ -9,11 +9,31 @@ INITIALIZATION_WRITES = (
     bytes.fromhex("fe020802"),
     bytes.fromhex("ff08020402040204818700000000000000000000"),
 )
+FOLLOWUP_WRITES = (
+    bytes.fromhex("fe020802"),
+    bytes.fromhex("ff08020402041404809800000000000000000000"),
+)
 
 
 def handle_notification(sender, data):
     timestamp = datetime.now().astimezone().isoformat(timespec="milliseconds")
     print(f"[{timestamp}] {sender.uuid}: {data.hex(' ')}", flush=True)
+
+
+async def wait_for_notification_burst(notification_queue, label):
+    received = 0
+    try:
+        async with asyncio.timeout(3.0):
+            for _ in range(3):
+                await notification_queue.get()
+                received += 1
+    except TimeoutError:
+        print(f"Only received {received} notifications for {label} within 3 seconds.")
+        return False
+
+    print(f"Received 3 notifications for {label}.")
+    return True
+
 
 async def main():
     print("Searching rower...")
@@ -46,12 +66,18 @@ async def main():
         if "write" not in command_characteristic.properties:
             raise RuntimeError(f"Characteristic does not support writes: {COMMAND_CHAR_UUID}")
 
-        await client.start_notify(characteristic, handle_notification)
+        notification_queue = asyncio.Queue()
+
+        def on_notification(sender, data):
+            handle_notification(sender, data)
+            notification_queue.put_nowait(bytes(data))
+
+        await client.start_notify(characteristic, on_notification)
         print(f"Listening for notifications on {characteristic.uuid}. Press Ctrl+C to stop.")
 
         answer = await asyncio.to_thread(
             input,
-            "Send the two captured initialization writes to the rower? [y/N]: ",
+            "Send the captured initialization and one follow-up pair? [y/N]: ",
         )
         if answer.strip().lower() == "y":
             for payload in INITIALIZATION_WRITES:
@@ -61,10 +87,21 @@ async def main():
                     payload,
                     response=True,
                 )
+
+            if await wait_for_notification_burst(notification_queue, "initialization"):
+                for payload in FOLLOWUP_WRITES:
+                    print(f"Sending one follow-up payload: {payload.hex(' ')}")
+                    await client.write_gatt_char(
+                        command_characteristic,
+                        payload,
+                        response=True,
+                    )
+                await wait_for_notification_burst(notification_queue, "follow-up")
         else:
-            print("Initialization writes skipped; listening passively.")
+            print("Initialization and follow-up writes skipped; listening passively.")
 
         while client.is_connected:
             await asyncio.sleep(1)
+        print("BLE connection disconnected.")
 
 asyncio.run(main())

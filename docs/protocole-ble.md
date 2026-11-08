@@ -208,7 +208,7 @@ envoie maintenant la première paire capturée (`fe020802` puis
 seulement après une confirmation `y` à l’exécution. Ces ATT Write Requests
 utilisent `response=True`. L’essai réel est consigné ci-dessous. Le sens de la
 paire reste inconnu, et les écritures `ff 08 ...` suivantes d’iFit contiennent
-des valeurs différentes qui ne sont pas incluses dans le script.
+des valeurs différentes qui ne sont pas toutes incluses dans le script.
 
 Essai réel du `bleak/main.py` le 2026-11-08 : la connexion BLE réussit et le
 script s’abonne à `00001535-1412-efde-1523-785feabcd123`. Après confirmation,
@@ -228,8 +228,33 @@ Observation : la paire déclenche au moins une réponse du rameur et un état
 indiqué par son voyant iFit. Elle ne suffit pas à maintenir cet état dans cet
 essai. L’écart d’environ 10 secondes sans écriture avant la déconnexion est
 compatible avec un délai d’inactivité ou un délai de protocole ; la raison HCI
-ne révèle pas la cause applicative. Comparer les écritures iFit qui suivent
-les premières notifications avant d’ajouter d’autres payloads au script.
+ne révèle pas la cause applicative.
+
+Dans les deux captures iFit, la suite immédiate après le premier burst est
+identique :
+
+| Etape | Payload court | Payload suivant |
+| --- | --- | --- |
+| 2e échange | `fe020802` | `ff08020402041404809800000000000000000000` |
+| 3e échange | `fe020802` | `ff0802040204140488a000000000000000000000` |
+| 4e échange | `fe020b02` | `ff0b020402070207820000008b00000000000000` |
+| 5e échange | `fe020a02` | `ff0a0204020602068400008c00000000000000` |
+
+Chaque paire est suivie d’un autre burst de notifications sur `0x000b`. Ces
+payloads sont des candidats capturés chez iFit, pas des commandes décodées.
+Après confirmation `y`, `bleak/main.py` envoie la paire initiale, attend trois
+notifications en 3 secondes, puis envoie la paire `08` suivante et attend
+trois autres notifications. Toutes les écritures utilisent `response=True`.
+Les paires `0b` et `0a` ne sont pas envoyées par le script.
+
+Essai réel de cette séquence : les deux paires `08` ont chacune été suivies
+d’un burst de trois notifications. La seconde paire est envoyée à
+`14.540976` dans le temps btmon ; la dernière notification du second burst
+arrive à `14.719022`. Le rameur termine la liaison à `24.751410` avec la
+raison HCI `0x13`, soit `10.032 s` après cette notification. Aucun autre
+Write Request n’apparaît après la seconde paire et avant la déconnexion.
+Cette paire produit donc le burst attendu, mais ne suffit pas à maintenir la
+liaison. Le troisième échange `08` du tableau reste à tester après accord.
 
 ## Règles de consignation
 

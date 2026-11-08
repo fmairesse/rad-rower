@@ -36,12 +36,11 @@ Analyser une capture BTSnoop d’une session iFit sur Android, puis corréler le
   Les payloads sont candidats seulement ; leur sémantique n’est pas décodée.
 - `bleak/main.py` s’abonne maintenant aux notifications de la caractéristique
   `00001535-1412-efde-1523-785feabcd123` et affiche leur heure locale et les
-  octets bruts en hexadécimal. Après confirmation `y`, il envoie aussi la
-  première paire d’écritures d’initialisation capturée sur `0x000e`. Essai
-  réel : connexion établie, voyant iFit allumé, puis trois notifications avant
-  extinction du voyant. `btmon` confirme que le rameur termine la liaison
-  (raison HCI `0x13`) environ 10 s après la troisième notification, sans
-  nouvelle écriture ATT observée avant la déconnexion.
+  octets bruts en hexadécimal. Après confirmation `y`, il envoie la paire
+  d’initialisation, attend trois notifications, puis envoie une seule paire
+  `08` supplémentaire et attend le burst suivant. Essai réel : le second burst
+  arrive, puis le rameur termine la liaison (raison HCI `0x13`) environ 10 s
+  plus tard, sans autre Write Request.
 - La capture montre des écritures répétées vers la caractéristique `0x000e`
   et des notifications sur `0x000b`. La signification des payloads et leur
   correspondance avec les actions de la session restent inconnues.
@@ -63,9 +62,10 @@ Aucun blocage constaté à ce stade ; l’environnement BLE reste à vérifier.
 
 ## Prochaine étape
 
-Comparer les écritures iFit qui suivent les notifications initiales pour
-comprendre pourquoi la liaison reste active dans iFit. Ne pas ajouter
-d’autres payloads au script sans données capturées et vérifiées.
+Après accord, tester uniquement le troisième échange `08` observé chez iFit
+(`fe020802` puis `ff0802040204140488a000000000000000000000`). Vérifier s’il
+produit un troisième burst ou prolonge la liaison. Ne pas envoyer les paires
+`0b`/`0a`.
 
 ## Documents associés
 
