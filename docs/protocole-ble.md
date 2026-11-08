@@ -18,7 +18,10 @@ les PDU ATT ; ce script n’a pas été conservé. Aucune commande n’a été e
 au rameur pendant l’analyse.
 
 La découverte GATT a observé les services et caractéristiques suivants.
-Les UUID 128 bits sont affichés après décodage de leur ordre little-endian BLE.
+Pour les UUID 128 bits, la représentation canonique correspond à l’inversion
+des 16 octets de l’UUID transporté dans les PDU ATT. Cette conversion donne les
+mêmes identifiants que Bleak ; `uuid.UUID(bytes_le=...)` ne convient pas ici,
+car cette fonction ne renverse que les premiers champs de l’UUID.
 
 | Plage de handles du service | UUID du service | Handle valeur | UUID caractéristique | Propriétés observées |
 | --- | --- | --- | --- | --- |
@@ -26,15 +29,21 @@ Les UUID 128 bits sont affichés après décodage de leur ordre little-endian BL
 | `0x0001-0x0007` | `0x1800` | `0x0005` | `0x2a01` | Read |
 | `0x0001-0x0007` | `0x1800` | `0x0007` | `0x2a04` | Read |
 | `0x0008-0x0008` | `0x1801` | — | — | — |
-| `0x0009-0x000e` | `eabcd123-785f-1523-deef-121433150000` | `0x000b` | `eabcd123-785f-1523-deef-121435150000` | Read, Notify |
-| `0x0009-0x000e` | `eabcd123-785f-1523-deef-121433150000` | `0x000e` | `eabcd123-785f-1523-deef-121434150000` | Read, Write |
-| `0x000f-0x0016` | `eabcd123-785f-1523-deef-121230150000` | `0x0011` | `eabcd123-785f-1523-deef-121232150000` | Write Without Response |
-| `0x000f-0x0016` | `eabcd123-785f-1523-deef-121230150000` | `0x0013` | `eabcd123-785f-1523-deef-121231150000` | Write, Notify |
-| `0x000f-0x0016` | `eabcd123-785f-1523-deef-121230150000` | `0x0016` | `eabcd123-785f-1523-deef-121234150000` | Read |
-| `0x0017-0xffff` | `f8daeb24-f9f4-e511-9ce9-5e5500140000` | `0x0019` | `f8daeb24-f9f4-e511-9ce9-5e5501140000` | Read, Write |
-| `0x0017-0xffff` | `f8daeb24-f9f4-e511-9ce9-5e5500140000` | `0x001b` | `f8daeb24-f9f4-e511-9ce9-5e5502140000` | Read, Notify |
-| `0x0017-0xffff` | `f8daeb24-f9f4-e511-9ce9-5e5500140000` | `0x001e` | `f8daeb24-f9f4-e511-9ce9-5e5503140000` | Read, Write |
-| `0x0017-0xffff` | `f8daeb24-f9f4-e511-9ce9-5e5500140000` | `0x0020` | `f8daeb24-f9f4-e511-9ce9-5e5504140000` | Read, Notify |
+| `0x0009-0x000e` | `00001533-1412-efde-1523-785feabcd123` | `0x000b` | `00001535-1412-efde-1523-785feabcd123` | Read, Notify |
+| `0x0009-0x000e` | `00001533-1412-efde-1523-785feabcd123` | `0x000e` | `00001534-1412-efde-1523-785feabcd123` | Read, Write |
+| `0x000f-0x0016` | `00001530-1212-efde-1523-785feabcd123` | `0x0011` | `00001532-1212-efde-1523-785feabcd123` | Write Without Response |
+| `0x000f-0x0016` | `00001530-1212-efde-1523-785feabcd123` | `0x0013` | `00001531-1212-efde-1523-785feabcd123` | Write, Notify |
+| `0x000f-0x0016` | `00001530-1212-efde-1523-785feabcd123` | `0x0016` | `00001534-1212-efde-1523-785feabcd123` | Read |
+| `0x0017-0xffff` | `00001400-555e-e99c-e511-f9f4f8daeb24` | `0x0019` | `00001401-555e-e99c-e511-f9f4f8daeb24` | Read, Write |
+| `0x0017-0xffff` | `00001400-555e-e99c-e511-f9f4f8daeb24` | `0x001b` | `00001402-555e-e99c-e511-f9f4f8daeb24` | Read, Notify |
+| `0x0017-0xffff` | `00001400-555e-e99c-e511-f9f4f8daeb24` | `0x001e` | `00001403-555e-e99c-e511-f9f4f8daeb24` | Read, Write |
+| `0x0017-0xffff` | `00001400-555e-e99c-e511-f9f4f8daeb24` | `0x0020` | `00001404-555e-e99c-e511-f9f4f8daeb24` | Read, Notify |
+
+Bleak labels `00001400-555e-e99c-e511-f9f4f8daeb24` as `HDP` by resolving
+its leading 16-bit value `0x1400`. Since the remaining UUID fields do not match
+the Bluetooth Base UUID, this label alone does not establish that the service
+implements the standard Health Device Profile. The full UUID and observed
+characteristics are the reliable identifiers.
 
 CCCD descriptors (`0x2902`) were observed at handles `0x000c`, `0x0014`,
 `0x001c` and `0x0021`. The client wrote `01 00` to `0x000c` before receiving
