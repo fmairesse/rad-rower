@@ -9,10 +9,13 @@ Sport RL via Bluetooth LE.
 
 ## Etape actuelle
 
-Analyser les notifications reçues sous Linux après la séquence capturée `08`
-puis `0b`. La paire `0b` produit trois notifications attendues et une
-notification supplémentaire, mais la connexion est terminée par le rameur
-environ 10 s plus tard.
+La capture iFit sans entraînement confirme l’émission des échanges `18`/`19`
+en mode connecté : 190/193 occurrences, avec des intervalles médians de
+0,677/0,676 s. La liaison est restée active jusqu’à une déconnexion locale
+après environ 135 s de trafic observé. Cela ne prouve pas que ces trames
+maintiennent la connexion. Le script propose aussi le handshake idle capturé
+`0a`/`08`/`2c`, derrière une confirmation distincte ; ni ce handshake ni le
+test `18`/`19` n’ont été exécutés sur le rameur.
 
 ## Acquis verifies
 
@@ -44,6 +47,11 @@ environ 10 s plus tard.
   l’essai du 2026-11-08, la paire `0b` a déclenché trois notifications, puis
   une quatrième environ 45 ms plus tard. Le rameur a néanmoins coupé la
   liaison (raison HCI `0x13`) environ 10 s après cette dernière notification.
+  Le script propose maintenant, avec une confirmation distincte, un essai de
+  15 s des échanges périodiques candidats `19`/`18` ; il n’a pas encore été
+  exécuté. La capture sans session contient aussi `0a`, un échange `08`
+  supplémentaire et un échange `2c` avec trois écritures longues ; le script
+  propose ces étapes séparément derrière une confirmation explicite.
 - La capture montre des écritures répétées vers la caractéristique `0x000e`
   et des notifications sur `0x000b`. La signification des payloads et leur
   correspondance avec les actions de la session restent inconnues.
@@ -65,10 +73,10 @@ Aucun blocage constaté à ce stade ; l’environnement BLE reste à vérifier.
 
 ## Prochaine étape
 
-Analyser le contenu des notifications observées après `0b` sans leur attribuer
-de sémantique non vérifiée. La paire `0b` produit bien le burst attendu, mais
-n’empêche pas la déconnexion distante après environ 10 s. Ne pas envoyer la
-paire `0a` sans capture correspondante et accord explicite.
+Exécuter le test optionnel du handshake idle et des trames `18`/`19` seulement
+après confirmation explicite dans le script, rameur sécurisé, puis comparer
+la durée de liaison aux captures. Les trames périodiques restent des candidates
+de polling/maintien, pas un heartbeat décodé.
 
 ## Documents associés
 

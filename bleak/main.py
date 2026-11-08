@@ -21,6 +21,46 @@ STREAM_EXCHANGE_WRITES = (
     bytes.fromhex("fe020b02"),
     bytes.fromhex("ff0b020402070207820000008b00000000000000"),
 )
+PERIODIC_CANDIDATE_EXCHANGES = (
+    (
+        bytes.fromhex("fe021903"),
+        bytes.fromhex("001202040215141502000f800040000000000000"),
+    ),
+    (
+        bytes.fromhex("fe021803"),
+        bytes.fromhex("001202040214141402000e1c9631001040400080"),
+    ),
+)
+PERIODIC_CANDIDATE_INTERVAL = 0.37
+PERIODIC_CANDIDATE_DURATION = 15.0
+CAPTURED_IDLE_SETUP = (
+    (
+        "0a exchange",
+        (
+            bytes.fromhex("fe020a02"),
+            bytes.fromhex("ff0a0204020602068400008c0000000000000000"),
+        ),
+        3,
+    ),
+    (
+        "post-0a 08 exchange",
+        (
+            bytes.fromhex("fe020802"),
+            bytes.fromhex("ff08020402040204959b00000000000000000000"),
+        ),
+        2,
+    ),
+    (
+        "2c exchange",
+        (
+            bytes.fromhex("fe022c04"),
+            bytes.fromhex("0012020402281428900701f2f4f4f2fe08001e2a"),
+            bytes.fromhex("01123c4c5a669088a6c2e404224e98b0ce1a2c7c"),
+            bytes.fromhex("ff088ad620980200000000000000000000000000"),
+        ),
+        2,
+    ),
+)
 
 
 def handle_notification(sender, data):
@@ -43,6 +83,64 @@ async def wait_for_notification_burst(notification_queue, label, expected_count=
 
     print(f"Received {expected_count} notifications for {label}.")
     return True
+
+
+async def send_captured_exchange(
+    client,
+    characteristic,
+    notification_queue,
+    label,
+    writes,
+    expected_count,
+):
+    discarded = 0
+    while not notification_queue.empty():
+        notification_queue.get_nowait()
+        discarded += 1
+    if discarded:
+        print(f"Discarded {discarded} queued notifications before {label}.")
+
+    for payload in writes:
+        print(f"Sending {label} payload: {payload.hex(' ')}")
+        await client.write_gatt_char(characteristic, payload, response=True)
+
+    return await wait_for_notification_burst(
+        notification_queue,
+        label,
+        expected_count,
+    )
+
+
+async def run_periodic_candidate_test(client, characteristic):
+    loop = asyncio.get_running_loop()
+    stop_at = loop.time() + PERIODIC_CANDIDATE_DURATION
+    next_exchange_at = loop.time()
+    exchange_index = 0
+
+    while client.is_connected and next_exchange_at < stop_at:
+        delay = next_exchange_at - loop.time()
+        if delay > 0:
+            await asyncio.sleep(delay)
+        if not client.is_connected:
+            break
+
+        exchange = PERIODIC_CANDIDATE_EXCHANGES[
+            exchange_index % len(PERIODIC_CANDIDATE_EXCHANGES)
+        ]
+        for payload in exchange:
+            print(f"Sending periodic candidate payload: {payload.hex(' ')}")
+            await client.write_gatt_char(
+                characteristic,
+                payload,
+                response=True,
+            )
+
+        exchange_index += 1
+        next_exchange_at += PERIODIC_CANDIDATE_INTERVAL
+        if next_exchange_at < loop.time():
+            next_exchange_at = loop.time() + PERIODIC_CANDIDATE_INTERVAL
+
+    print(f"Completed {exchange_index} periodic candidate exchanges.")
 
 
 async def main():
@@ -130,6 +228,40 @@ async def main():
                             notification_queue,
                             "0b exchange",
                         )
+                        if client.is_connected:
+                            setup_answer = await asyncio.to_thread(
+                                input,
+                                "Send captured idle 0a/2c setup? [y/N]: ",
+                            )
+                            run_periodic_test = True
+                            if setup_answer.strip().lower() == "y":
+                                for setup_exchange in CAPTURED_IDLE_SETUP:
+                                    (
+                                        label,
+                                        writes,
+                                        expected_count,
+                                    ) = setup_exchange
+                                    if not await send_captured_exchange(
+                                        client,
+                                        command_characteristic,
+                                        notification_queue,
+                                        label,
+                                        writes,
+                                        expected_count,
+                                    ):
+                                        run_periodic_test = False
+                                        break
+
+                            if run_periodic_test and client.is_connected:
+                                periodic_answer = await asyncio.to_thread(
+                                    input,
+                                    "Run 18/19 test for 15s? [y/N]: ",
+                                )
+                                if periodic_answer.strip().lower() == "y":
+                                    await run_periodic_candidate_test(
+                                        client,
+                                        command_characteristic,
+                                    )
         else:
             print("Initialization and follow-up writes skipped; listening passively.")
 

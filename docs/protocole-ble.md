@@ -175,6 +175,95 @@ révèle pas encore la sémantique du couple ni celle des champs qui changent
 entre les payloads. Ne pas rejouer ces écritures sans accord explicite et
 protocole de test convenu.
 
+## Analyse hors ligne des écritures périodiques
+
+Les captures BTSnoop ont été relues avec `btmon` et les Write Requests ont été
+filtrées par connexion ACL du rameur, afin d’exclure les autres périphériques
+présents dans la capture ciblée : handle `0x0001` pour
+`btsnoop_hci-202611081036.log` et `0x0010` pour `btsnoop_hci-start.log`.
+Les intervalles ci-dessous sont des écarts entre occurrences du même payload,
+calculés à partir des horodatages btmon.
+
+| Payload court | Occurrences (capture 1 / start) | Intervalle médian (capture 1 / start) | Payload long suivant le plus fréquent |
+| --- | ---: | ---: | --- |
+| `fe021803` | 366 / 181 | 0.720 s / 0.677 s | `001202040214141402000e1c9631001040400080` |
+| `fe021903` | 369 / 183 | 0.720 s / 0.676 s | `001202040215141502000f800040000000000000` |
+| `fe020c02` | 149 / 19 | 1.124 s / 0.855 s | `ff0c020402081408020002001030000000000000` |
+
+Les écritures longues correspondantes suivent généralement leur écriture
+courte en environ 0.08–0.09 s. Les payloads longs ci-dessus sont stables dans
+la grande majorité des occurrences ; quelques variantes existent, notamment
+pour `fe021903` et `fe020c02`.
+
+Dans la capture start, les écritures `fe021803` et `fe021903` sont déjà
+présentes avant le start annoté. Elles continuent jusqu’à environ 90 s après
+la dernière paire `fe 02 0d 02` associée à la fin de session. Dans la capture
+du 8 novembre à 10:36, les dernières occurrences de `fe021803` et `fe021903`
+sont vers `353.5 s` et `353.9 s` ; le HCI Disconnect Complete arrive à
+`355.429 s` avec la raison `0x16` (connexion terminée par l’hôte local). Dans
+la capture start, les dernières occurrences sont vers `2995.5 s` ; le
+Disconnect Complete survient à `2997.427 s`, également avec la raison `0x16`.
+Ces fins de connexion iFit ne démontrent donc pas que le rameur aurait
+déconnecté un client dépourvu de ces écritures.
+
+Interprétation limitée : `fe021803` et `fe021903`, avec leurs écritures longues
+associées, sont de bons candidats à un échange périodique de polling ou de
+maintien de flux. Leur périodicité et leur présence autour de la session ne
+permettent pas de les qualifier de heartbeat ni d’établir qu’elles maintiennent
+la connexion. `fe020c02` est moins fréquent et sa cadence varie davantage.
+Les couples `fe020d02` / `ff0d...` sont associés à des changements d’état,
+pas à un rythme régulier. Ne pas rejouer ces écritures sans accord explicite.
+
+`bleak/main.py` contient maintenant un test optionnel, après la séquence `08`
+/ `0b`, pour envoyer les échanges capturés `19` puis `18` en alternance. Chaque
+paire est envoyée avec `response=True`, les débuts de paire sont espacés de
+0.37 s et le test s’arrête après 15 s ou à la déconnexion. Une seconde
+confirmation `y` est requise. Cette cadence reprend la médiane observée entre
+les écritures courtes en régime établi ; le motif initial de la capture
+comporte parfois deux `19` successifs. Le test n’a pas encore été exécuté sur
+le rameur. Une capture iFit sans démarrage de session décrite ci-dessous
+confirme que ces échanges existent aussi hors entraînement.
+
+`bleak/main.py` propose également, après l’échange `0b`, un handshake idle
+capturé, avec une confirmation distincte : `0a`, un échange `08` supplémentaire
+et l’échange `2c` suivi des trois écritures longues observées. Les réponses
+attendues sont respectivement trois, deux et deux notifications. Les
+notifications déjà en attente sont vidées avant chaque étape pour ne pas
+compter la notification supplémentaire du précédent échange `0b`. Les
+payloads `2c` restent opaques. Le handshake idle puis le test `18`/`19` ne sont
+pas exécutés automatiquement et n’ont pas encore été testés sur le rameur.
+
+## iFit connection without a workout
+
+The user reports that `bugreport/btsnoop_hci-only-connect.log` was captured
+after opening iFit without starting a workout, while the rower's iFit light
+remained on. On the rower's ACL handle `0x0001`, the capture contains 1,175
+Write Requests to `0x000e` and 1,364 notifications on `0x000b`. The captured
+traffic runs from `28.111 s` to `161.974 s`; HCI Disconnect Complete occurs at
+`163.233 s` with reason `0x16` (the local host terminated the connection).
+
+The startup writes include three `08` exchanges, then the captured `0b` and
+`0a` exchanges, followed by another `08` exchange with
+`ff08020402040204959b00000000000000000000`, then `fe022c04` and three writes
+whose payloads begin `0012`, `0112` and `ff08`. The periodic `19`/`18` writes
+follow this setup. Their short payload counts are 193 (`19`) and 190 (`18`);
+their median per-payload intervals are `0.676 s` and `0.677 s`. Each is
+typically followed by its associated 20-byte write after about `0.08–0.09 s`.
+Neither `fe020d02` nor `fe020c02` occurs in this capture.
+
+This is direct evidence that the `18`/`19` exchanges are used by iFit while
+connected without a workout. It strengthens the polling/connection-maintenance
+hypothesis, but does not prove that these writes are what keep the BLE link or
+the rower light active. The observed `0a` and `2c` setup writes are now
+available in `bleak/main.py` only behind a separate interactive confirmation;
+their semantics remain unknown.
+
+The larger file `bugreport/btsnoop_hci-only-connect.log.last` contains 13
+separate ACL connections to the proprietary service, with mixed occurrences
+of `fe020d02`; it is not a single clean connection-only trace and cannot be
+used to attribute those state writes to one user action without more timing
+context.
+
 ## Notifications avant le démarrage de session
 
 Dans les deux captures iFit, le client active les notifications en écrivant
