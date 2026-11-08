@@ -1,6 +1,6 @@
 # Contexte du projet
 
-Dernière mise a jour : 2026-11-01.
+Dernière mise a jour : 2026-11-08.
 
 ## Objectif
 
@@ -9,8 +9,8 @@ Sport RL via Bluetooth LE.
 
 ## Etape actuelle
 
-Préparer l’apprentissage et les expériences BLE sous Linux avec Python et
-Bleak, avant de porter les connaissances acquises dans l’application Android.
+Analyser une capture BTSnoop d’une session iFit sur Android, puis corréler les
+échanges observés aux actions de l’utilisateur avant toute expérience active.
 
 ## Acquis verifies
 
@@ -18,19 +18,33 @@ Bleak, avant de porter les connaissances acquises dans l’application Android.
 - L’utilisateur indique débuter en BLE et souhaite progresser dans son
   utilisation de l’IA.
 - Une documentation de contexte a été initialisée pour être versionnée avec
-  le projet. Le statut du dépôt Git n’a pas été vérifié.
+  le projet.
 - La CLI BlueZ `bluetoothctl` est disponible dans `/usr/bin/bluetoothctl`.
   Vérification du 2026-11-01 : `command -v bluetoothctl` et
-  `bluetoothctl --version` (version 5.72). Aucun scan ni connexion effectué.
-- Aucun résultat d’expérience BLE n’a encore été consigné.
+  `bluetoothctl --version` (version 5.72). Aucun scan ni connexion sous Linux
+  n’a encore été effectué.
+- Une capture `bugreport/btsnoop_hci.log` d’une session iFit a été fournie
+  depuis un Google Pixel 3a sous Android 12. Elle contient une connexion BLE
+  réussie et des échanges ATT/GATT ; voir les observations dans
+  [les notes de protocole BLE](protocole-ble.md).
+- Une deuxième capture horodatée, `bugreport/btsnoop_hci-202611081036.log`,
+  a été rapprochée des actions iFit. Une écriture candidate se corrèle à la
+  pause, la reprise, aux résistances 2/3 et à l’arrêt ; son sens reste à
+  vérifier dans les notes de protocole.
+- La capture montre des écritures répétées vers la caractéristique `0x000e`
+  et des notifications sur `0x000b`. La signification des payloads et leur
+  correspondance avec les actions de la session restent inconnues.
 
 ## Hypotheses et inconnues
 
-- Les services, caractéristiques et commandes exposés par le rameur ne
-  sont pas encore connus.
+- Les services et caractéristiques observés sont consignés dans les notes de
+  protocole ; le sens des commandes et le format des métriques restent
+  inconnus. Ne pas déduire une commande de pilotage de la seule forme des
+  payloads.
 - La disponibilité de l’adaptateur Bluetooth, le fonctionnement du service
   BlueZ, ainsi que la disponibilité de Python et de Bleak restent à vérifier.
-- Les besoins d’appairage et les possibilités réelles de pilotage restent à déterminer expérimentalement.
+- Les besoins d’appairage et les possibilités réelles de pilotage restent à
+  déterminer expérimentalement.
 
 ## Blocages
 
@@ -38,9 +52,9 @@ Aucun blocage constaté à ce stade ; l’environnement BLE reste à vérifier.
 
 ## Prochaine étape
 
-Vérifier que `bluetoothctl list` détecte un contrôleur Bluetooth, sans
-versionner son adresse. Préparer ensuite un premier scan BLE sans commande
-de pilotage, puis vérifier l’environnement Python.
+Décoder les payloads qui suivent l’écriture candidate `fe 02 0d 02` et les
+notifications de la caractéristique `0x000b`. Ne pas envoyer de commandes au
+rameur sans accord explicite.
 
 ## Documents associés
 
