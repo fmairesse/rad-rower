@@ -206,30 +206,30 @@ qu’il faut démarrer l’entraînement pour recevoir des notifications. Le scr
 envoie maintenant la première paire capturée (`fe020802` puis
 `ff08020402040204818700000000000000000000`) après `start_notify()`, et
 seulement après une confirmation `y` à l’exécution. Ces ATT Write Requests
-utilisent `response=True`. Le sens de la paire reste inconnu, et les écritures
-`ff 08 ...` suivantes d’iFit contiennent des valeurs différentes qui ne sont
-pas incluses dans le script.
+utilisent `response=True`. L’essai réel est consigné ci-dessous. Le sens de la
+paire reste inconnu, et les écritures `ff 08 ...` suivantes d’iFit contiennent
+des valeurs différentes qui ne sont pas incluses dans le script.
 
-Essai manuel du script : après confirmation des deux écritures, l’utilisateur
-observe l’allumage du voyant iFit, reçoit trois notifications, puis voit le
-voyant s’éteindre. Les notifications reçues étaient :
+Essai réel du `bleak/main.py` le 2026-11-08 : la connexion BLE réussit et le
+script s’abonne à `00001535-1412-efde-1523-785feabcd123`. Après confirmation,
+il envoie les deux payloads ci-dessus ; le voyant iFit du rameur s’allume et
+trois notifications arrivent, puis le voyant s’éteint. Les notifications 2
+et 3 sont identiques à des payloads vus dans les captures iFit précédentes ;
+la première partage le préfixe `fe 02 21 03` avec une notification capturée,
+mais son reste diffère. L’utilisateur rapporte que le script s’est arrêté
+après l’extinction du voyant. La capture `bugreport/btmon-bleak-202611082205.log`
+confirme une déconnexion BLE initiée par le rameur : événement HCI `Disconnect
+Complete`, statut réussi, raison `0x13` (`Remote User Terminated Connection`)
+à `19.982618` dans le temps btmon. Il survient `10.031 s` après la troisième
+notification (`9.952032`). Aucune autre écriture ATT n’est observée entre les
+trois notifications et la déconnexion.
 
-```text
-fe022103c3fcffca14e707b8c0d3f81997000f9c
-00120104021d141d810253010300000000000f9c
-ff0ffefdc3fcffca14e707b8c0d3f81997000f9c
-```
-
-Les deux dernières correspondent exactement à deux notifications du premier
-burst iFit capturé. Dans les captures iFit, ce burst est suivi d’autres
-échanges : deux nouvelles paires `fe 02 08 02` / `ff 08 ...`, puis des paires
-commençant par `fe 02 0b 02` / `ff 0b ...` et `fe 02 0a 02` / `ff 0a ...`.
-La liaison BLE est restée active quelques secondes après l’extinction du
-voyant, selon l’utilisateur. Cela rend plausible que le premier couple amorce
-la communication sans suffire à maintenir l’état iFit, ou que le voyant
-indique un état applicatif distinct de la liaison BLE. La cause n’est pas
-établie. Les captures iFit montrent des échanges supplémentaires, mais leurs
-payloads varient et ne sont pas ajoutés au script sans examen séparé.
+Observation : la paire déclenche au moins une réponse du rameur et un état
+indiqué par son voyant iFit. Elle ne suffit pas à maintenir cet état dans cet
+essai. L’écart d’environ 10 secondes sans écriture avant la déconnexion est
+compatible avec un délai d’inactivité ou un délai de protocole ; la raison HCI
+ne révèle pas la cause applicative. Comparer les écritures iFit qui suivent
+les premières notifications avant d’ajouter d’autres payloads au script.
 
 ## Règles de consignation
 
