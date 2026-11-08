@@ -14,8 +14,11 @@ en mode connecté : 190/193 occurrences, avec des intervalles médians de
 0,677/0,676 s. La liaison est restée active jusqu’à une déconnexion locale
 après environ 135 s de trafic observé. Cela ne prouve pas que ces trames
 maintiennent la connexion. Le script propose aussi le handshake idle capturé
-`0a`/`08`/`2c`, derrière une confirmation distincte ; ni ce handshake ni le
-test `18`/`19` n’ont été exécutés sur le rameur.
+`0a`/`08`/`2c`, derrière une confirmation distincte. Un essai réel a reçu les
+bursts attendus (3/2/2). Un second essai a envoyé 18 échanges `18`/`19` à
+~0,37 s d’intervalle, puis le rameur a terminé la liaison (raison HCI `0x13`)
+environ 0,18 s après la dernière notification, avant les 15 s prévues. La
+cause applicative reste inconnue.
 
 ## Acquis verifies
 
@@ -48,10 +51,10 @@ test `18`/`19` n’ont été exécutés sur le rameur.
   une quatrième environ 45 ms plus tard. Le rameur a néanmoins coupé la
   liaison (raison HCI `0x13`) environ 10 s après cette dernière notification.
   Le script propose maintenant, avec une confirmation distincte, un essai de
-  15 s des échanges périodiques candidats `19`/`18` ; il n’a pas encore été
-  exécuté. La capture sans session contient aussi `0a`, un échange `08`
-  supplémentaire et un échange `2c` avec trois écritures longues ; le script
-  propose ces étapes séparément derrière une confirmation explicite.
+  15 s des échanges périodiques candidats `19`/`18`. Lors du premier essai,
+  les étapes `0a`/`08`/`2c` ont produit les bursts attendus ; le test périodique
+  s’est arrêté après 12 échanges et le btmon était tronqué. Le second essai
+  confirme la déconnexion distante (`0x13`) après 18 échanges, avant les 15 s.
 - La capture montre des écritures répétées vers la caractéristique `0x000e`
   et des notifications sur `0x000b`. La signification des payloads et leur
   correspondance avec les actions de la session restent inconnues.
@@ -73,10 +76,10 @@ Aucun blocage constaté à ce stade ; l’environnement BLE reste à vérifier.
 
 ## Prochaine étape
 
-Exécuter le test optionnel du handshake idle et des trames `18`/`19` seulement
-après confirmation explicite dans le script, rameur sécurisé, puis comparer
-la durée de liaison aux captures. Les trames périodiques restent des candidates
-de polling/maintien, pas un heartbeat décodé.
+Comparer les écritures intercalées du flux iFit sans entraînement à celles du
+test limité à `18`/`19` pour identifier ce qui manque avant toute nouvelle
+transmission. Ne pas attribuer un rôle de heartbeat ni une cause applicative
+au disconnect `0x13` sans preuve supplémentaire.
 
 ## Documents associés
 

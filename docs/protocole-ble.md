@@ -221,8 +221,7 @@ paire est envoyée avec `response=True`, les débuts de paire sont espacés de
 confirmation `y` est requise. Cette cadence reprend la médiane observée entre
 les écritures courtes en régime établi ; le motif initial de la capture
 comporte parfois deux `19` successifs. Le test n’a pas encore été exécuté sur
-le rameur. Une capture iFit sans démarrage de session décrite ci-dessous
-confirme que ces échanges existent aussi hors entraînement.
+le rameur au moment de la capture iFit sans session décrite ci-dessous.
 
 `bleak/main.py` propose également, après l’échange `0b`, un handshake idle
 capturé, avec une confirmation distincte : `0a`, un échange `08` supplémentaire
@@ -231,7 +230,7 @@ attendues sont respectivement trois, deux et deux notifications. Les
 notifications déjà en attente sont vidées avant chaque étape pour ne pas
 compter la notification supplémentaire du précédent échange `0b`. Les
 payloads `2c` restent opaques. Le handshake idle puis le test `18`/`19` ne sont
-pas exécutés automatiquement et n’ont pas encore été testés sur le rameur.
+pas exécutés automatiquement. Leur premier essai réel est consigné ci-dessous.
 
 ## iFit connection without a workout
 
@@ -263,6 +262,35 @@ separate ACL connections to the proprietary service, with mixed occurrences
 of `fe020d02`; it is not a single clean connection-only trace and cannot be
 used to attribute those state writes to one user action without more timing
 context.
+
+## Bleak idle and periodic-candidate trial
+
+On 2026-11-08, the user ran the optional idle setup and periodic-candidate
+test. The `0a` exchange was followed by three notifications, the additional
+`08` exchange by two, and the `2c` exchange by two, matching the counts used
+by the script. One notification left queued after the `0b` burst was discarded
+before `0a`.
+
+The btmon excerpt shows successful ATT Write Responses for the periodic
+candidate writes. The short writes `fe021903` and `fe021803` are approximately
+0.37 s apart, matching the script's configured inter-exchange interval. The
+visible `18` writes are followed by notifications beginning `fe020402` and
+`ff040100`; their protocol meaning is unknown. The console reports 12
+periodic exchanges followed by `BLE connection disconnected`, so the first
+test did not complete its 15 s duration. Its btmon file was truncated before
+the disconnect event.
+
+A second test was captured in `btmon-bleak-202611082320.log`. It completed 18
+periodic exchanges (nine `19`, nine `18`) at approximately 0.37 s between
+short writes, then stopped before the configured 15 s. The last visible
+notifications arrive at `37.830086 s`; HCI Disconnect Complete occurs at
+`38.009647 s`, about 0.18 s later, with reason `0x13` (`Remote User Terminated
+Connection`). The rower therefore ends the link while the periodic test is
+running, not after a 10 s idle interval. ATT Write Responses confirm that the
+writes were received at the ATT layer, but do not show semantic acceptance.
+The reason code identifies the remote as the disconnecting side; the
+application-level cause is unknown. Do not repeat this active sequence until
+the connection-only iFit trace is compared for other interleaved writes.
 
 ## Notifications avant le démarrage de session
 
