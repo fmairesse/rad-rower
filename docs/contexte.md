@@ -31,6 +31,9 @@ Analyser une capture BTSnoop d’une session iFit sur Android, puis corréler le
   a été rapprochée des actions iFit. Une écriture candidate se corrèle à la
   pause, la reprise, aux résistances 2/3 et à l’arrêt ; son sens reste à
   vérifier dans les notes de protocole.
+- Une capture ciblée `bugreport/btsnoop_hci-start.log` associe plus
+  précisément le même couple d’écritures aux actions start/stop/end d’iFit.
+  Les payloads sont candidats seulement ; leur sémantique n’est pas décodée.
 - La capture montre des écritures répétées vers la caractéristique `0x000e`
   et des notifications sur `0x000b`. La signification des payloads et leur
   correspondance avec les actions de la session restent inconnues.
@@ -52,9 +55,9 @@ Aucun blocage constaté à ce stade ; l’environnement BLE reste à vérifier.
 
 ## Prochaine étape
 
-Décoder les payloads qui suivent l’écriture candidate `fe 02 0d 02` et les
-notifications de la caractéristique `0x000b`. Ne pas envoyer de commandes au
-rameur sans accord explicite.
+Décoder les champs du couple d’écritures `fe 02 0d 02` / `ff 0d ...` et les
+notifications de la caractéristique `0x000b`. Ne pas rejouer de commandes au
+rameur sans accord explicite et protocole de test convenu.
 
 ## Documents associés
 

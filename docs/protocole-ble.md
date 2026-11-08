@@ -145,6 +145,36 @@ après l’arrêt de la session iFit. La capture se termine à `10:41:41.794` ; 
 dernière ligne du CSV (`10:42:57`) est postérieure à la capture et ne peut pas
 y être corrélée.
 
+## Capture ciblée start/stop du 8 novembre
+
+Fichier : `bugreport/btsnoop_hci-start.log` (1,784,150 octets, non versionné).
+Le log s’étend de `14:57:44.902` à `15:47:55.293` heure locale. Il contient
+de nombreux autres événements de connexion BLE ; la session étudiée utilise
+le handle ACL `0x0010`, dont l’adresse distante correspond au rameur repéré
+par Bleak. La connexion réussit à `15:45:27.097`.
+
+Les quatre couples `Durée`/`Heure` fournis donnent une origine de chronomètre
+estimée autour de `15:45:25.592`, avec une dispersion de `0.277 s`. Le début
+de session est donc estimé à `15:45:53.821`.
+
+Sur le handle ACL `0x0010`, les trois actions sont associées à des écritures
+sortantes vers le handle ATT `0x000e` :
+
+| Action | Ecriture courte `fe 02 0d 02` | Ecriture suivante `ff 0d ...` | Décalage estimé |
+| --- | --- | --- | --- |
+| Start, estimé `15:45:53.821` | `15:45:53.206` | `15:45:53.296` : `ff0d020402091409020200100200330000000000` | environ `0.6 s` avant |
+| Stop, estimé `15:46:02.069` | `15:46:02.345` | `15:46:02.429` : `ff0d020402091409020200100300340000000000` | environ `0.3 s` après |
+| End, estimé `15:46:08.097` | `15:46:08.335` | `15:46:08.414` : `ff0d020402091409020200100400350000000000` | environ `0.2 s` après |
+
+Une quatrième paire apparaît à `15:46:09.272` / `15:46:09.360`, après la fin
+notée, avec le payload `ff0d020402091409020200100100320000000000`.
+
+Cette capture renforce nettement la corrélation du couple d’écritures
+`fe 02 0d 02` puis `ff 0d ...` avec start, stop et end dans iFit. Elle ne
+révèle pas encore la sémantique du couple ni celle des champs qui changent
+entre les payloads. Ne pas rejouer ces écritures sans accord explicite et
+protocole de test convenu.
+
 ## Règles de consignation
 
 - Séparer les observations brutes de leur interprétation.
