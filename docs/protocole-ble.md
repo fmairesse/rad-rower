@@ -242,10 +242,12 @@ identique :
 
 Chaque paire est suivie d’un autre burst de notifications sur `0x000b`. Ces
 payloads sont des candidats capturés chez iFit, pas des commandes décodées.
-Après confirmation `y`, `bleak/main.py` envoie la paire initiale, attend trois
-notifications en 3 secondes, puis envoie la paire `08` suivante et attend
 trois autres notifications. Toutes les écritures utilisent `response=True`.
-Les paires `0b` et `0a` ne sont pas envoyées par le script.
+Après confirmation `y`, `bleak/main.py` envoie la paire initiale, attend trois
+notifications en 3 secondes, puis envoie les deuxième et troisième paires
+`08`, chacune seulement après le burst de trois notifications précédent.
+Toutes les écritures utilisent `response=True`. Les paires `0b` et `0a` ne
+sont pas envoyées par le script.
 
 Essai réel de cette séquence : les deux paires `08` ont chacune été suivies
 d’un burst de trois notifications. La seconde paire est envoyée à
@@ -254,7 +256,17 @@ arrive à `14.719022`. Le rameur termine la liaison à `24.751410` avec la
 raison HCI `0x13`, soit `10.032 s` après cette notification. Aucun autre
 Write Request n’apparaît après la seconde paire et avant la déconnexion.
 Cette paire produit donc le burst attendu, mais ne suffit pas à maintenir la
-liaison. Le troisième échange `08` du tableau reste à tester après accord.
+liaison. Le troisième échange `08` est maintenant implémenté dans le script,
+et a été testé : il produit deux notifications, `fe02110241e8141280020c4c471445434d4e5440`
+et `ff110104020d140d880209829083718984955c40`, et non trois. Dans les deux
+captures iFit, ces deux notifications sont suivies par la paire `0b` du
+tableau. Pendant l’essai, aucune écriture `0b` n’a été envoyée ; le rameur
+termine la liaison avec la raison HCI `0x13` environ 10 s après les deux
+notifications. Le script attend désormais deux notifications pour le
+troisième échange afin de refléter l’observation.
+
+La paire `0b` est le prochain candidat à tester, après accord explicite. Elle
+n’est pas encore envoyée par le script.
 
 ## Règles de consignation
 

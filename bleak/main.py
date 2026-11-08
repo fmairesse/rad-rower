@@ -13,6 +13,10 @@ FOLLOWUP_WRITES = (
     bytes.fromhex("fe020802"),
     bytes.fromhex("ff08020402041404809800000000000000000000"),
 )
+THIRD_EXCHANGE_WRITES = (
+    bytes.fromhex("fe020802"),
+    bytes.fromhex("ff0802040204140488a000000000000000000000"),
+)
 
 
 def handle_notification(sender, data):
@@ -20,18 +24,20 @@ def handle_notification(sender, data):
     print(f"[{timestamp}] {sender.uuid}: {data.hex(' ')}", flush=True)
 
 
-async def wait_for_notification_burst(notification_queue, label):
+async def wait_for_notification_burst(notification_queue, label, expected_count=3):
     received = 0
     try:
         async with asyncio.timeout(3.0):
-            for _ in range(3):
+            for _ in range(expected_count):
                 await notification_queue.get()
                 received += 1
     except TimeoutError:
-        print(f"Only received {received} notifications for {label} within 3 seconds.")
+        print(
+            f"Only received {received} of {expected_count} notifications for {label} within 3 seconds."
+        )
         return False
 
-    print(f"Received 3 notifications for {label}.")
+    print(f"Received {expected_count} notifications for {label}.")
     return True
 
 
@@ -77,7 +83,7 @@ async def main():
 
         answer = await asyncio.to_thread(
             input,
-            "Send the captured initialization and one follow-up pair? [y/N]: ",
+            "Send the captured initialization and two follow-up pairs? [y/N]: ",
         )
         if answer.strip().lower() == "y":
             for payload in INITIALIZATION_WRITES:
@@ -96,7 +102,19 @@ async def main():
                         payload,
                         response=True,
                     )
-                await wait_for_notification_burst(notification_queue, "follow-up")
+                if await wait_for_notification_burst(notification_queue, "follow-up"):
+                    for payload in THIRD_EXCHANGE_WRITES:
+                        print(f"Sending third-exchange payload: {payload.hex(' ')}")
+                        await client.write_gatt_char(
+                            command_characteristic,
+                            payload,
+                            response=True,
+                        )
+                    await wait_for_notification_burst(
+                        notification_queue,
+                        "third exchange",
+                        expected_count=2,
+                    )
         else:
             print("Initialization and follow-up writes skipped; listening passively.")
 

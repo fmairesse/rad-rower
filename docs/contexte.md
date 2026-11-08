@@ -36,11 +36,13 @@ Analyser une capture BTSnoop d’une session iFit sur Android, puis corréler le
   Les payloads sont candidats seulement ; leur sémantique n’est pas décodée.
 - `bleak/main.py` s’abonne maintenant aux notifications de la caractéristique
   `00001535-1412-efde-1523-785feabcd123` et affiche leur heure locale et les
-  octets bruts en hexadécimal. Après confirmation `y`, il envoie la paire
-  d’initialisation, attend trois notifications, puis envoie une seule paire
-  `08` supplémentaire et attend le burst suivant. Essai réel : le second burst
-  arrive, puis le rameur termine la liaison (raison HCI `0x13`) environ 10 s
-  plus tard, sans autre Write Request.
+  octets bruts en hexadécimal. Après confirmation `y`, il envoie jusqu’à trois
+  paires `08`, en attendant un burst de trois notifications avant chaque paire
+  suivante ; le troisième échange attend deux notifications. Essai réel : le
+  troisième échange produit deux notifications, puis le rameur termine la
+  liaison (raison HCI `0x13`) environ 10 s plus tard, sans autre Write Request.
+  Dans les captures iFit, l’échange suivant est la paire `0b`, pas encore
+  ajoutée au script.
 - La capture montre des écritures répétées vers la caractéristique `0x000e`
   et des notifications sur `0x000b`. La signification des payloads et leur
   correspondance avec les actions de la session restent inconnues.
@@ -62,10 +64,10 @@ Aucun blocage constaté à ce stade ; l’environnement BLE reste à vérifier.
 
 ## Prochaine étape
 
-Après accord, tester uniquement le troisième échange `08` observé chez iFit
-(`fe020802` puis `ff0802040204140488a000000000000000000000`). Vérifier s’il
-produit un troisième burst ou prolonge la liaison. Ne pas envoyer les paires
-`0b`/`0a`.
+Après accord explicite, tester uniquement la paire `0b` observée dans iFit
+après les deux notifications du troisième échange `08`. Vérifier si elle
+déclenche un nouveau burst ou prolonge la liaison ; ne pas envoyer la paire
+`0a`.
 
 ## Documents associés
 
