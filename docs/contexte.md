@@ -11,14 +11,13 @@ Sport RL via Bluetooth LE.
 
 La capture iFit sans entraînement confirme l’émission des échanges `18`/`19`
 en mode connecté : 190/193 occurrences, avec des intervalles médians de
-0,677/0,676 s. La liaison est restée active jusqu’à une déconnexion locale
-après environ 135 s de trafic observé. Cela ne prouve pas que ces trames
-maintiennent la connexion. Le script propose aussi le handshake idle capturé
-`0a`/`08`/`2c`, derrière une confirmation distincte. Un essai réel a reçu les
-bursts attendus (3/2/2). Un second essai a envoyé 18 échanges `18`/`19` à
-~0,37 s d’intervalle, puis le rameur a terminé la liaison (raison HCI `0x13`)
-environ 0,18 s après la dernière notification, avant les 15 s prévues. La
-cause applicative reste inconnue.
+0,677/0,676 s. Cela ne prouve pas que ces trames maintiennent la connexion.
+L’essai du 23:38 a exécuté les 14 étapes de la continuation idle ; son btmon
+est tronqué. Les essais périodiques du 09:00 et du 22:30 ont tous deux fini
+par une déconnexion distante HCI `0x13`. Dans le 22:30, la boucle seule a
+envoyé 14 `19` et 13 `18`; le rameur coupe la liaison 9,99 s après le dernier
+burst du setup, juste avant le prochain `18`. La cause applicative reste
+inconnue.
 
 ## Acquis verifies
 
@@ -50,11 +49,13 @@ cause applicative reste inconnue.
   l’essai du 2026-11-08, la paire `0b` a déclenché trois notifications, puis
   une quatrième environ 45 ms plus tard. Le rameur a néanmoins coupé la
   liaison (raison HCI `0x13`) environ 10 s après cette dernière notification.
-  Le script propose maintenant, avec une confirmation distincte, un essai de
-  15 s des échanges périodiques candidats `19`/`18`. Lors du premier essai,
-  les étapes `0a`/`08`/`2c` ont produit les bursts attendus ; le test périodique
-  s’est arrêté après 12 échanges et le btmon était tronqué. Le second essai
-  confirme la déconnexion distante (`0x13`) après 18 échanges, avant les 15 s.
+  Le script propose une continuation idle optionnelle jusqu’aux échanges
+  `17`/`11`/`10`, avec une confirmation distincte avant l’envoi. Le test du
+  23:38 a confirmé les 37 écritures et les bursts des 14 étapes, mais son
+  btmon était tronqué. Les tests de 09:00 et 22:30 ont tous deux obtenu un
+  disconnect distant (`0x13`) avant 15 s. Le 22:30 a transmis 14 `19` et 13
+  `18` dans la boucle seule, puis le rameur a coupé la liaison ~5 ms avant le
+  prochain `18`, 9,99 s après le dernier burst du setup.
 - La capture montre des écritures répétées vers la caractéristique `0x000e`
   et des notifications sur `0x000b`. La signification des payloads et leur
   correspondance avec les actions de la session restent inconnues.
@@ -76,10 +77,12 @@ Aucun blocage constaté à ce stade ; l’environnement BLE reste à vérifier.
 
 ## Prochaine étape
 
-Comparer les écritures intercalées du flux iFit sans entraînement à celles du
-test limité à `18`/`19` pour identifier ce qui manque avant toute nouvelle
-transmission. Ne pas attribuer un rôle de heartbeat ni une cause applicative
-au disconnect `0x13` sans preuve supplémentaire.
+`18`/`19`, puis faire correspondre l’écriture `18` affichée avec le dernier
+événement HCI. Ne pas répéter le test avant d’avoir décidé comment poursuivre ;
+Analyser pourquoi le disconnect distant survient environ 10 s après le dernier
+burst du setup malgré les échanges périodiques `18`/`19`. Ne pas répéter le
+test avant d’avoir une nouvelle hypothèse vérifiable ; la cause applicative du
+motif HCI `0x13` reste inconnue.
 
 ## Documents associés
 

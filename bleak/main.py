@@ -48,7 +48,7 @@ CAPTURED_IDLE_SETUP = (
             bytes.fromhex("fe020802"),
             bytes.fromhex("ff08020402040204959b00000000000000000000"),
         ),
-        2,
+        3,
     ),
     (
         "2c exchange",
@@ -59,6 +59,101 @@ CAPTURED_IDLE_SETUP = (
             bytes.fromhex("ff088ad620980200000000000000000000000000"),
         ),
         2,
+    ),
+    (
+        "post-2c 19 exchange",
+        (
+            bytes.fromhex("fe021903"),
+            bytes.fromhex("0012020402151415020e00000000000000000000"),
+            bytes.fromhex("ff070000001001004a0000000000000000000000"),
+        ),
+        2,
+    ),
+    (
+        "17 exchange",
+        (
+            bytes.fromhex("fe021703"),
+            bytes.fromhex("0012020402131413020c00000000000000000000"),
+            bytes.fromhex("ff0500800100b600000000000000000000000000"),
+        ),
+        2,
+    ),
+    (
+        "post-17 19 exchange",
+        (
+            bytes.fromhex("fe021903"),
+            bytes.fromhex("001202040215141502000f001000c01c4c0000e0"),
+            bytes.fromhex("ff070000001000086a0000000000000000000000"),
+        ),
+        3,
+    ),
+    (
+        "post-17 18 exchange",
+        (
+            bytes.fromhex("fe021803"),
+            bytes.fromhex("001202040214141402000e1c9631001040400080"),
+            bytes.fromhex("ff0600000081600c000000000000000000000000"),
+        ),
+        4,
+    ),
+    (
+        "first 11 exchange",
+        (
+            bytes.fromhex("fe021102"),
+            bytes.fromhex("ff110204020d140d020500000000085802008a00"),
+        ),
+        2,
+    ),
+    (
+        "second 11 exchange",
+        (
+            bytes.fromhex("fe021102"),
+            bytes.fromhex("ff110204020d140d020500000000085802008a00"),
+        ),
+        2,
+    ),
+    (
+        "post-11 19 exchange",
+        (
+            bytes.fromhex("fe021903"),
+            bytes.fromhex("0012020402151415020e00000000000000000000"),
+            bytes.fromhex("ff070000001001004a0000000000000000000000"),
+        ),
+        2,
+    ),
+    (
+        "first 10 exchange",
+        (
+            bytes.fromhex("fe021002"),
+            bytes.fromhex("ff100204020c140c020400000002a81600e60000"),
+        ),
+        2,
+    ),
+    (
+        "post-10 19 exchange",
+        (
+            bytes.fromhex("fe021903"),
+            bytes.fromhex("001202040215141502000f800040000000000000"),
+            bytes.fromhex("ff070000001080119b0000000000000000000000"),
+        ),
+        3,
+    ),
+    (
+        "second 10 exchange",
+        (
+            bytes.fromhex("fe021002"),
+            bytes.fromhex("ff100204020c140c020500000000100100380000"),
+        ),
+        2,
+    ),
+    (
+        "post-10 18 exchange",
+        (
+            bytes.fromhex("fe021803"),
+            bytes.fromhex("001202040214141402000e1c9631001040400080"),
+            bytes.fromhex("ff0600000081600c000000000000000000000000"),
+        ),
+        4,
     ),
 )
 
@@ -231,9 +326,16 @@ async def main():
                         if client.is_connected:
                             setup_answer = await asyncio.to_thread(
                                 input,
-                                "Send captured idle 0a/2c setup? [y/N]: ",
+                                "Send idle setup (0a/2c/17/11/10)? [y/N]: ",
                             )
-                            run_periodic_test = True
+                            periodic_answer = await asyncio.to_thread(
+                                input,
+                                "Run 18/19 test for 15s? [y/N]: ",
+                            )
+                            run_periodic_test = (
+                                periodic_answer.strip().lower() == "y"
+                            )
+
                             if setup_answer.strip().lower() == "y":
                                 for setup_exchange in CAPTURED_IDLE_SETUP:
                                     (
@@ -253,15 +355,10 @@ async def main():
                                         break
 
                             if run_periodic_test and client.is_connected:
-                                periodic_answer = await asyncio.to_thread(
-                                    input,
-                                    "Run 18/19 test for 15s? [y/N]: ",
+                                await run_periodic_candidate_test(
+                                    client,
+                                    command_characteristic,
                                 )
-                                if periodic_answer.strip().lower() == "y":
-                                    await run_periodic_candidate_test(
-                                        client,
-                                        command_characteristic,
-                                    )
         else:
             print("Initialization and follow-up writes skipped; listening passively.")
 

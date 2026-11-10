@@ -223,14 +223,15 @@ les écritures courtes en régime établi ; le motif initial de la capture
 comporte parfois deux `19` successifs. Le test n’a pas encore été exécuté sur
 le rameur au moment de la capture iFit sans session décrite ci-dessous.
 
-`bleak/main.py` propose également, après l’échange `0b`, un handshake idle
-capturé, avec une confirmation distincte : `0a`, un échange `08` supplémentaire
-et l’échange `2c` suivi des trois écritures longues observées. Les réponses
-attendues sont respectivement trois, deux et deux notifications. Les
-notifications déjà en attente sont vidées avant chaque étape pour ne pas
-compter la notification supplémentaire du précédent échange `0b`. Les
-payloads `2c` restent opaques. Le handshake idle puis le test `18`/`19` ne sont
-pas exécutés automatiquement. Leur premier essai réel est consigné ci-dessous.
+`bleak/main.py` now offers the captured idle continuation after `0b`, with a
+separate confirmation: `0a`, another `08`, `2c` and its three long writes,
+then the observed `19`, `17`, `19`, `18`, `11`, `11`, `19`, `10`, `19`, `10`,
+`18` sequence. Each stage waits for the notification count observed in the
+capture. Both confirmations are requested before any of these writes, so
+interactive input does not interrupt the handshake. Queued notifications are
+drained before each stage. The `2c`, `17`, `11` and `10` payload meanings are
+unknown. A static comparison confirmed all 37 writes and notification counts
+across the 14 stages; the updated sequence has not been retested on the rower.
 
 ## iFit connection without a workout
 
@@ -266,10 +267,12 @@ context.
 ## Bleak idle and periodic-candidate trial
 
 On 2026-11-08, the user ran the optional idle setup and periodic-candidate
-test. The `0a` exchange was followed by three notifications, the additional
-`08` exchange by two, and the `2c` exchange by two, matching the counts used
-by the script. One notification left queued after the `0b` burst was discarded
-before `0a`.
+test. The `0a` exchange was followed by three notifications. The console
+reported two after the additional `08`, then discarded one queued notification
+before `2c`; comparison with the source capture shows that third notification
+belongs to the `08` exchange. The script now expects three there. The `2c`
+exchange was followed by two notifications. One notification left queued after
+the `0b` burst was also discarded before `0a`.
 
 The btmon excerpt shows successful ATT Write Responses for the periodic
 candidate writes. The short writes `fe021903` and `fe021803` are approximately
@@ -285,12 +288,81 @@ periodic exchanges (nine `19`, nine `18`) at approximately 0.37 s between
 short writes, then stopped before the configured 15 s. The last visible
 notifications arrive at `37.830086 s`; HCI Disconnect Complete occurs at
 `38.009647 s`, about 0.18 s later, with reason `0x13` (`Remote User Terminated
-Connection`). The rower therefore ends the link while the periodic test is
-running, not after a 10 s idle interval. ATT Write Responses confirm that the
-writes were received at the ATT layer, but do not show semantic acceptance.
-The reason code identifies the remote as the disconnecting side; the
-application-level cause is unknown. Do not repeat this active sequence until
-the connection-only iFit trace is compared for other interleaved writes.
+Connection`). ATT Write Responses confirm that the writes were received at the
+ATT layer, but do not show semantic acceptance. The `18` exchanges were
+followed by repeated `04` notification pairs.
+
+In the connection-only iFit capture, the sequence after the `2c` response
+includes short writes in this order: `19`, `17`, `19`, `18`, `11`, `11`,
+`19`, `10`, `19`, `10`, `18`. The second Bleak test sent only `19`/`18` after
+`2c`, omitting the observed `17`, `11` and `10` exchanges. In that run, the
+last `2c`-related notifications arrived at `27.975 s`, and the remote
+disconnect occurred at `38.009647 s`, about 10.03 s later, despite the
+intervening `18`/`19` writes and notifications. This timing is compatible
+with an application-level timeout or a missing expected transition, but does
+not establish either explanation. The HCI reason only identifies the remote
+as the disconnecting side.
+
+A third test on 2026-11-08 ran the updated continuation. The console reports
+the expected notification counts for all 14 stages, including three after the
+post-`0a` `08`, and the 37 captured writes match the connection-only trace. The
+periodic test then raised `org.bluez.Error.Failed: Not connected` during a
+GATT write, before its configured 15 s duration. The supplied
+`btmon-bleak-202611082338.log` ends in the middle of an ATT Write Request at
+event #545 (`47.269 s`), before any Disconnect Complete event. The exact
+failed ATT write and HCI disconnect reason therefore remain unknown; do not
+infer them from this incomplete trace.
+
+A fifth test was run on 2026-11-10 and captured in
+`btmon-bleak-202611102230.log`. The idle continuation again produced the
+expected notification bursts. Across the whole connection, btmon records 18
+short `19` writes and 15 short `18` writes; four `19` and two `18` belong to
+the setup. The periodic loop itself therefore sent 14 `19` and 13 `18` writes,
+with a median interval of `0.370012 s`, from `20.796755 s` to `30.419018 s`.
+
+expected notification bursts. The periodic loop itself sent 14 `19` and 13 `18` writes, with a
+median inter-arrival interval of `0.370012 s`. Its first short write was at
+`82.607590 s`, 2.8 ms after the final setup notification at `82.604791 s`;
+its last short write was `19` at `92.229243 s`.
+
+HCI Disconnect Complete occurs at `92.594379 s` with reason `0x13` (`Remote
+User Terminated Connection`), `9.990 s` after the setup notification. The next
+short `18` was due around `92.599243 s`, about 5 ms after the disconnect; it
+does not appear on HCI. The last `19` long write did receive an ATT response.
+The console shows the attempted `18` write and the traceback
+`BleakDBusError: [org.bluez.Error.Failed] Not connected` from
+`write_gatt_char()`, so the BlueZ error follows the remote disconnect.
+
+The repeatable timing is consistent with an approximately 10 s timeout from
+the final setup exchange that the periodic `18`/`19` traffic does not reset,
+but it does not prove that explanation. The HCI reason establishes that the
+remote ends the link; it does not identify the application-level cause. The
+console was captured with stderr redirected to `tee` for this test.
+
+This timing is consistent with an approximately 10 s timeout associated with
+the post-setup state that the periodic `18`/`19` traffic does not reset, but
+does not prove that explanation. The HCI reason establishes that the remote
+ends the link; it does not identify the application-level cause. The console
+was captured with stderr redirected to `tee` for this test.
+requests preceding the disconnect were acknowledged at the ATT layer; they do
+not establish protocol-level acceptance. Do not infer the meaning of reason
+`0x13` or repeat this test without resolving the console/HCI discrepancy.
+A fifth test was run on 2026-11-10 and captured in
+`btmon-bleak-202611102230.log`. The idle continuation again produced the
+expected notification bursts. The periodic phase recorded 18 short `19`
+writes and 15 short `18` writes, with a median interval of `0.370039 s`.
+Periodic writes span `79.909201–92.229243 s` (`12.32 s`). Disconnect Complete
+occurs at `92.594379 s` with reason `0x13`, about 0.31 s after the last `19`
+long write request. The final successfully recorded periodic command is
+`19`; the console then prints an `18` short and long payload, but neither
+appears in btmon. The console traceback reports
+`BleakDBusError: [org.bluez.Error.Failed] Not connected` from
+`write_gatt_char()`. This is consistent with the remote disconnect arriving
+before BlueZ could send the printed `18` write. The HCI capture proves the
+remote termination; it does not identify why the rower terminates the link.
+The console was saved with stderr redirected to `tee` for this test.
+not establish protocol-level acceptance. Do not infer the meaning of reason
+`0x13` beyond the remote side ending the link.
 
 ## Notifications avant le démarrage de session
 
