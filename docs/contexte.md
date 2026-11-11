@@ -1,6 +1,6 @@
 # Contexte du projet
 
-Dernière mise a jour : 2026-11-08.
+Dernière mise a jour : 2026-11-11.
 
 ## Objectif
 
@@ -11,13 +11,13 @@ Sport RL via Bluetooth LE.
 
 La capture iFit sans entraînement confirme l’émission des échanges `18`/`19`
 en mode connecté : 190/193 occurrences, avec des intervalles médians de
-0,677/0,676 s. Cela ne prouve pas que ces trames maintiennent la connexion.
-L’essai du 23:38 a exécuté les 14 étapes de la continuation idle ; son btmon
-est tronqué. Les essais périodiques du 09:00 et du 22:30 ont tous deux fini
-par une déconnexion distante HCI `0x13`. Dans le 22:30, la boucle seule a
-envoyé 14 `19` et 13 `18`; le rameur coupe la liaison 9,99 s après le dernier
-burst du setup, juste avant le prochain `18`. La cause applicative reste
-inconnue.
+0,677/0,676 s. Un essai Bleak avec les trois trames complètes par échange a
+maintenu la connexion pendant 60 s à une cadence réduite (un échange toutes
+les 0,75 s, soit chaque type toutes les 1,5 s). Le rameur a ensuite coupé la
+liaison 9,99 s après la dernière notification. Cela confirme qu’au moins cette
+cadence suffit pendant l’essai ; le délai d’environ 10 s après l’arrêt des
+échanges est également confirmé. Voir les détails et les limites dans les
+notes de protocole BLE.
 
 ## Acquis verifies
 
@@ -77,12 +77,14 @@ Aucun blocage constaté à ce stade ; l’environnement BLE reste à vérifier.
 
 ## Prochaine étape
 
-`18`/`19`, puis faire correspondre l’écriture `18` affichée avec le dernier
-événement HCI. Ne pas répéter le test avant d’avoir décidé comment poursuivre ;
-Analyser pourquoi le disconnect distant survient environ 10 s après le dernier
-burst du setup malgré les échanges périodiques `18`/`19`. Ne pas répéter le
-test avant d’avoir une nouvelle hypothèse vérifiable ; la cause applicative du
-motif HCI `0x13` reste inconnue.
+Résultats des essais du 2026-11-11 : les échanges périodiques complets `19`/`18`
+ont maintenu la liaison pendant 15 s à 0,37 s, puis 60 s à 0,75 s entre
+échanges. Dans les deux essais, le rameur a envoyé les notifications attendues
+et a coupé la liaison (`0x13`) environ 10 s après le dernier échange. La
+prochaine étape est d’examiner si les notifications fournissent des métriques
+utiles et de vérifier si le voyant iFit reste actif pendant la boucle. Ne pas
+envoyer de commandes de pilotage ou changer la résistance sans accord explicite.
+Voir les notes de protocole (« Message framing »).
 
 ## Documents associés
 

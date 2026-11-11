@@ -82,7 +82,7 @@ environ 10 secondes sans autre action entre chaque étape :
 2. Démarrer la session ; noter le temps
   et attendre 10 secondes.
 3. Régler la résistance à 2 ; appuyer sur `Tour/Lap`, noter le temps écoulé et attendre 10 secondes.
-4. Régler la résistance à 3 ; appuyer sur `Tour/Lap`, noter le temps écoulé  etattendre 10 secondes.
+4. Régler la résistance à 3 ; appuyer sur `Tour/Lap`, noter le temps écoulé  et attendre 10 secondes.
 5. Noter le début des deux coups de rame et le moment où les métriques
    apparaissent.
 6. Mettre en pause ; noter le temps et attendre 10 secondes.
@@ -313,56 +313,92 @@ event #545 (`47.269 s`), before any Disconnect Complete event. The exact
 failed ATT write and HCI disconnect reason therefore remain unknown; do not
 infer them from this incomplete trace.
 
-A fifth test was run on 2026-11-10 and captured in
+A fourth run was captured on 2026-11-09 in
+`btmon-bleak-202611090900.log`. The idle continuation completed, then HCI
+Disconnect Complete occurred at `30.783831 s` with reason `0x13` during the
+periodic test, before its configured 15 s duration. This confirms a remote
+termination but does not identify its application-level cause.
+
+A fifth run was captured on 2026-11-10 in
 `btmon-bleak-202611102230.log`. The idle continuation again produced the
 expected notification bursts. Across the whole connection, btmon records 18
 short `19` writes and 15 short `18` writes; four `19` and two `18` belong to
-the setup. The periodic loop itself therefore sent 14 `19` and 13 `18` writes,
-with a median interval of `0.370012 s`, from `20.796755 s` to `30.419018 s`.
-
-expected notification bursts. The periodic loop itself sent 14 `19` and 13 `18` writes, with a
-median inter-arrival interval of `0.370012 s`. Its first short write was at
-`82.607590 s`, 2.8 ms after the final setup notification at `82.604791 s`;
-its last short write was `19` at `92.229243 s`.
+the setup. The periodic loop alone sent 14 `19` and 13 `18` writes, with a
+median interval of `0.370012 s`. Its first short write is at `82.607590 s`,
+2.8 ms after the final setup notification at `82.604791 s`; its last is `19`
+at `92.229243 s`.
 
 HCI Disconnect Complete occurs at `92.594379 s` with reason `0x13` (`Remote
-User Terminated Connection`), `9.990 s` after the setup notification. The next
-short `18` was due around `92.599243 s`, about 5 ms after the disconnect; it
-does not appear on HCI. The last `19` long write did receive an ATT response.
-The console shows the attempted `18` write and the traceback
-`BleakDBusError: [org.bluez.Error.Failed] Not connected` from
-`write_gatt_char()`, so the BlueZ error follows the remote disconnect.
+User Terminated Connection`), `9.990 s` after the final setup notification.
+The next short `18` would be due around `92.599243 s`, about 5 ms after the
+disconnect, and does not appear on HCI. The last `19` long write receives an
+ATT response. The console prints the attempted `18` write and then reports
+`BleakDBusError: [org.bluez.Error.Failed] Not connected`; the remote
+disconnect therefore precedes the BlueZ error. The console was captured with
+stderr redirected to `tee`.
 
-The repeatable timing is consistent with an approximately 10 s timeout from
-the final setup exchange that the periodic `18`/`19` traffic does not reset,
-but it does not prove that explanation. The HCI reason establishes that the
-remote ends the link; it does not identify the application-level cause. The
-console was captured with stderr redirected to `tee` for this test.
+The 2026-11-09 and 2026-11-10 runs both end in remote reason `0x13` before
+15 s. In the 2026-11-10 run, the repeated timing is compatible with an
+approximately 10 s timeout from the final setup exchange that the periodic
+`18`/`19` traffic does not reset, but it does not prove that explanation.
+ATT responses do not establish semantic acceptance, and reason `0x13` does
+not identify the application-level cause. Do not repeat the same sequence
+without a new testable hypothesis.
 
-This timing is consistent with an approximately 10 s timeout associated with
-the post-setup state that the periodic `18`/`19` traffic does not reset, but
-does not prove that explanation. The HCI reason establishes that the remote
-ends the link; it does not identify the application-level cause. The console
-was captured with stderr redirected to `tee` for this test.
-requests preceding the disconnect were acknowledged at the ATT layer; they do
-not establish protocol-level acceptance. Do not infer the meaning of reason
-`0x13` or repeat this test without resolving the console/HCI discrepancy.
-A fifth test was run on 2026-11-10 and captured in
-`btmon-bleak-202611102230.log`. The idle continuation again produced the
-expected notification bursts. The periodic phase recorded 18 short `19`
-writes and 15 short `18` writes, with a median interval of `0.370039 s`.
-Periodic writes span `79.909201–92.229243 s` (`12.32 s`). Disconnect Complete
-occurs at `92.594379 s` with reason `0x13`, about 0.31 s after the last `19`
-long write request. The final successfully recorded periodic command is
-`19`; the console then prints an `18` short and long payload, but neither
-appears in btmon. The console traceback reports
-`BleakDBusError: [org.bluez.Error.Failed] Not connected` from
-`write_gatt_char()`. This is consistent with the remote disconnect arriving
-before BlueZ could send the printed `18` write. The HCI capture proves the
-remote termination; it does not identify why the rower terminates the link.
-The console was saved with stderr redirected to `tee` for this test.
-not establish protocol-level acceptance. Do not infer the meaning of reason
-`0x13` beyond the remote side ending the link.
+## Message framing (2026-11-11)
+
+A short iFit capture (`bugreport/btsnoop_hci-only-connect2.log`, about 7 s,
+host-initiated disconnect `0x16` when the user taps disconnect in iFit, no
+special write before it) was decoded with a throwaway script. Every complete
+exchange in it fits the same framing, for writes and notifications alike:
+
+- header frame: `fe 02 <total length> <number of frames incl. header>`;
+- data frames: `00 12 <18 bytes>`, `01 12 <18 bytes>`, ...;
+- last frame: `ff <remaining length> <bytes>`.
+
+Example: `fe 02 19 03` announces 25 bytes = 18 (`00 12`) + 7 (`ff 07`). The same
+holds for `18` (24 = 18 + 6), `17`, `2c` (44 = 18 + 18 + 8), `08`, `0a`, `0b`,
+`10`, `11`, `0d`, and for notifications such as `fe 02 21 03` / `fe 02 32 04`.
+The length field matches the final `ff <n>` frame in all observed messages.
+The same framing is used by an external project (qdomyos-zwift, `proformrower.cpp`)
+to reassemble rower notifications; its checksum details were not verified here.
+
+Observation: the periodic loop of `bleak/main.py` used in the runs up to
+2026-11-10 sent only the header and the `00 12` frame, never the final
+`ff 06`/`ff 07` frame (the console logs list two payloads per exchange), whereas
+iFit sends all three. Those loop messages were therefore incomplete. Combined
+with the remote disconnect `0x13` about 10 s after the last complete message
+(setup), this suggests a rower-side watchdog that only complete messages reset.
+This is a hypothesis, not a result: the script now sends the three frames and
+the next run must confirm or refute it.
+
+Result of the run of 2026-11-11 21:42 (`bleak-202611112142.log`,
+`btmon-bleak-202611112142.log`): with the three frames per exchange, the
+periodic loop ran its full 15 s (41 exchanges, 20 `19`/`18` pairs alternating
+every ~0.36 s) with no remote disconnect, unlike the five earlier runs. Each
+exchange was answered by a complete notification message (`fe 02 21 03` /
+`fe 02 32 04`). After the loop stopped, the last notification arrived at
+`61.397 s` and HCI Disconnect Complete (reason `0x13`, remote) at `71.430 s`,
+10.03 s later. This matches the earlier ~10 s gaps and supports a rower-side
+watchdog of about 10 s that complete `18`/`19` messages keep resetting. Only
+one 15 s run supports this so far; a longer trial is described below.
+
+Result of the run of 2026-11-11 21:56 (`bleak-202611112156.log`,
+`btmon-bleak-202611112156.log`): the script sent 80 complete periodic
+exchanges for 60 s, alternating `19` and `18` every 0.75 s (each type every
+1.5 s). This is about half the iFit rate for each type. The second BLE
+connection in the btmon capture remained active throughout the periodic loop;
+the rower then disconnected remotely (`0x13`) at `129.155947 s`, 9.989 s after
+the last notification at `119.166560 s`. The capture also contains an earlier
+connection that disconnected at `39.199926 s`; that event is separate from
+the 60 s periodic run and should not be used to measure its result.
+
+This confirms, in one 60 s trial, that the complete `18`/`19` exchanges at
+0.75 s spacing are sufficient to avoid the ~10 s remote disconnect observed
+when writes stop. The repeated ~10 s delay after the final notification in
+both the 15 s and 60 s tests is strong evidence for an inactivity timeout
+reset by this traffic, but does not establish the rower's internal rule. The
+lower rate is now a viable test cadence; it is not yet a production guarantee.
 
 ## Notifications avant le démarrage de session
 
