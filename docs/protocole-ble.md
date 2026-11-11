@@ -214,7 +214,7 @@ la connexion. `fe020c02` est moins fréquent et sa cadence varie davantage.
 Les couples `fe020d02` / `ff0d...` sont associés à des changements d’état,
 pas à un rythme régulier. Ne pas rejouer ces écritures sans accord explicite.
 
-`bleak/main.py` contient maintenant un test optionnel, après la séquence `08`
+`bleak/01-connection.py` contient maintenant un test optionnel, après la séquence `08`
 / `0b`, pour envoyer les échanges capturés `19` puis `18` en alternance. Chaque
 paire est envoyée avec `response=True`, les débuts de paire sont espacés de
 0.37 s et le test s’arrête après 15 s ou à la déconnexion. Une seconde
@@ -223,7 +223,7 @@ les écritures courtes en régime établi ; le motif initial de la capture
 comporte parfois deux `19` successifs. Le test n’a pas encore été exécuté sur
 le rameur au moment de la capture iFit sans session décrite ci-dessous.
 
-`bleak/main.py` now offers the captured idle continuation after `0b`, with a
+`bleak/01-connection.py` now offers the captured idle continuation after `0b`, with a
 separate confirmation: `0a`, another `08`, `2c` and its three long writes,
 then the observed `19`, `17`, `19`, `18`, `11`, `11`, `19`, `10`, `19`, `10`,
 `18` sequence. Each stage waits for the notification count observed in the
@@ -255,7 +255,7 @@ This is direct evidence that the `18`/`19` exchanges are used by iFit while
 connected without a workout. It strengthens the polling/connection-maintenance
 hypothesis, but does not prove that these writes are what keep the BLE link or
 the rower light active. The observed `0a` and `2c` setup writes are now
-available in `bleak/main.py` only behind a separate interactive confirmation;
+available in `bleak/01-connection.py` only behind a separate interactive confirmation;
 their semantics remain unknown.
 
 The larger file `bugreport/btsnoop_hci-only-connect.log.last` contains 13
@@ -363,7 +363,7 @@ The length field matches the final `ff <n>` frame in all observed messages.
 The same framing is used by an external project (qdomyos-zwift, `proformrower.cpp`)
 to reassemble rower notifications; its checksum details were not verified here.
 
-Observation: the periodic loop of `bleak/main.py` used in the runs up to
+Observation: the periodic loop of `bleak/01-connection.py` used in the runs up to
 2026-11-10 sent only the header and the `00 12` frame, never the final
 `ff 06`/`ff 07` frame (the console logs list two payloads per exchange), whereas
 iFit sends all three. Those loop messages were therefore incomplete. Combined
@@ -415,7 +415,7 @@ Cela montre que la commande start n’est pas nécessaire pour recevoir au moins
 les notifications de base de `0x000b`. Cela ne permet pas de conclure que les
 métriques de rame sont émises avant start : leur décodage reste à faire.
 
-Le script `bleak/main.py` appelle `BleakClient.start_notify()` sur la
+Le script `bleak/01-connection.py` appelle `BleakClient.start_notify()` sur la
 caractéristique `00001535-1412-efde-1523-785feabcd123`, ce qui configure le
 CCCD. Dans les deux captures, après la réponse à l’écriture CCCD, iFit envoie une écriture
 `fe 02 08 02` au handle `0x000e`, puis une écriture de 20 octets commençant
@@ -435,7 +435,7 @@ utilisent `response=True`. L’essai réel est consigné ci-dessous. Le sens de 
 paire reste inconnu, et les écritures `ff 08 ...` suivantes d’iFit contiennent
 des valeurs différentes qui ne sont pas toutes incluses dans le script.
 
-Essai réel du `bleak/main.py` le 2026-11-08 : la connexion BLE réussit et le
+Essai réel du `bleak/01-connection.py` le 2026-11-08 : la connexion BLE réussit et le
 script s’abonne à `00001535-1412-efde-1523-785feabcd123`. Après confirmation,
 il envoie les deux payloads ci-dessus ; le voyant iFit du rameur s’allume et
 trois notifications arrivent, puis le voyant s’éteint. Les notifications 2
@@ -468,7 +468,7 @@ identique :
 Les échanges `08` sont suivis d’un burst de notifications sur `0x000b`. Ces
 payloads sont des candidats capturés chez iFit, pas des commandes décodées.
 Toutes les écritures du script utilisent `response=True`.
-Après confirmation `y`, `bleak/main.py` envoie la paire initiale, attend trois
+Après confirmation `y`, `bleak/01-connection.py` envoie la paire initiale, attend trois
 notifications en 3 secondes, puis envoie les deuxième et troisième paires
 `08`, chacune seulement après le burst de trois notifications précédent.
 Le troisième échange produit deux notifications ; le script attend donc deux

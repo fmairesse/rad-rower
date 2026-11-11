@@ -41,7 +41,7 @@ notes de protocole BLE.
 - Une capture ciblée `bugreport/btsnoop_hci-start.log` associe plus
   précisément le même couple d’écritures aux actions start/stop/end d’iFit.
   Les payloads sont candidats seulement ; leur sémantique n’est pas décodée.
-- `bleak/main.py` s’abonne maintenant aux notifications de la caractéristique
+- `bleak/01-connection.py` s’abonne maintenant aux notifications de la caractéristique
   `00001535-1412-efde-1523-785feabcd123` et affiche leur heure locale et les
   octets bruts en hexadécimal. Après confirmation `y`, il envoie les paires
   d’initialisation `08`, puis la paire `0b` seulement si les deux notifications
