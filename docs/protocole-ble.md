@@ -521,6 +521,48 @@ ne révèle pas la cause applicative. La signification des payloads reste
 inconnue ; ne pas ajouter ni envoyer la paire `0a` sans nouvelle capture et
 accord explicite.
 
+## Métriques sans session démarrée (2026-11-12)
+
+Captures comparées (décodées avec `tshark`, ATT sur le handle HCI `0x0001`,
+écritures `0x000e`, notifications `0x000b`) :
+
+- `bugreport/btsnoop_hci-only-connect2.log` : connexion iFit seule, 6 s d’ATT
+  (3 réponses `18`, 6 `19`). Trop court pour servir seul de référence ; la
+  référence longue est `btsnoop_hci-only-connect.log` (130 s, 190 réponses `18`).
+- `bugreport/btsnoop_hci-row-nostart.log` : iFit connecté, quelques coups de
+  rame sans démarrer la session ; connexion à 08:23:20, 19 s d’ATT, 23
+  réponses `18`, 25 `19`. Les fichiers `*.log.last` sont des rotations plus
+  anciennes (ils recouvrent `only-connect2`) et n’ont pas servi.
+
+Observation : sans rame, tous les champs ci-dessous restent à 0 pendant les
+130 s de référence (aucun changement après le premier échange). Avec des coups
+de rame et sans session, les mêmes messages portent des valeurs qui évoluent.
+Le rameur envoie donc des données avant le démarrage de session, à condition
+que le client fasse le polling `18`/`19` ; il n’y a pas de notification
+spontanée entre deux polls.
+
+Champs qui changent (offsets 0-indexés dans chaque trame de 20 octets de la
+notification, après la trame d’en-tête `fe 02 ..`) :
+
+| Réponse | Trame | Octet(s) | Comportement observé |
+| --- | --- | --- | --- |
+| `18` | `00 12 ..` | 12, 14 | 0 au repos ; 0x19→0x2d→0x37→0x30 (octet 12), 0x11→0x34 croissant (octet 14) |
+| `18` | `01 12 ..` | 6 et 10 (égaux) | 0x12→0x22, +1 environ chaque seconde (compteur de temps ?) |
+| `18` | `01 12 ..` | 14–16 | valeur 24 bits LE croissante ; 0 au repos |
+| `18` | `ff 0e ..` | 3, 12 | octet 12 : 0→4 en 15 s (nombre de coups ?) ; octet 3 croissant 0→0x14 |
+| `19` | `ff 0f ..` | 11, 13, 16–19 | change par paliers (0xf5, 0xce, 0xba, 0xc1 à l’octet 11) |
+
+Interprétations non vérifiées : les identifications entre parenthèses sont des
+hypothèses fondées sur le sens de variation uniquement. Le premier échange `18`
+de `row-nostart` montre déjà le compteur 0x12 alors que les autres champs
+valent 0 ; l’origine de ce compteur (démarré avant la connexion ?) est
+inconnue. Aucune corrélation avec les coups de rame réels n’est possible : leur
+nombre et leur instant n’ont pas été notés.
+
+Prochaine expérience : refaire la capture en notant le nombre exact de coups
+et leur instant, puis rapprocher ces valeurs des octets 12 et 14 de la trame
+`00 12` et de l’octet 12 de la trame `ff 0e`.
+
 ## Règles de consignation
 
 - Séparer les observations brutes de leur interprétation.

@@ -21,6 +21,12 @@ notes de protocole BLE.
 
 ## Acquis verifies
 
+- Capture iFit du 2026-11-12 (`btsnoop_hci-row-nostart.log`) : sans session
+  démarrée, les réponses aux polls `18`/`19` contiennent déjà des valeurs qui
+  évoluent avec les coups de rame (alors qu’elles restent à 0 sans rame). Le
+  décodage des champs reste à faire ; voir « Métriques sans session démarrée »
+  dans les notes de protocole.
+
 - Le workspace contient les dossiers `android/` et `bleak/`.
 - L’utilisateur indique débuter en BLE et souhaite progresser dans son
   utilisation de l’IA.
