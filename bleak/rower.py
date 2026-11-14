@@ -2,7 +2,9 @@
 
 The init and poll messages come from the "Sport RL" branch of
 qdomyos-zwift ("QZ", src/devices/proformrower/proformrower.cpp). No resistance
-command is ever sent. See docs/protocole-ble.md.
+command is ever sent by `keep_alive()` itself. Other scripts can queue extra
+messages with `Rower.queue()`; they are sent between two polls. See
+docs/protocole-ble.md.
 
 `keep_alive()` connects, runs the init sequence, then polls until the duration
 elapses, the rower disconnects or the task is cancelled. Callers receive each
@@ -11,6 +13,7 @@ notification (raw bytes, one 20-byte frame at a time) through `on_notification`.
 
 import asyncio
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime
 
 from bleak import BleakClient, BleakScanner
@@ -94,10 +97,90 @@ POLL = (
     ),
 )
 
+# Session state commands, copied from iFit captures (not from QZ). The rower
+# reports its state in the 50-byte message. With the 17/19 poll the state is
+# byte 25 (1 idle, 2 running, 3 paused; 4 finished is only seen in iFit
+# captures, where the 18/19 poll puts the state at byte 21) and byte 21 is a
+# counter of seconds. Only START is replayed by scripts for now.
+H0D = "fe020d02"
+START = (
+    (
+        "17 before start",
+        message(
+            H17,
+            "0012020402131413020c00000000000000000000",
+            "ff0500800000b500000000000000000000000000",
+        ),
+    ),
+    ("start", message(H0D, "ff0d020402091409020200100200330000000000")),
+)
+STATE_BYTE = 25
+COUNTER_BYTE = 21
+STATE_NAMES = {1: "idle", 2: "running", 3: "paused", 4: "finished"}
+
 # After a write, wait until the rower has been silent this long (or for this max).
 QUIET_TIME = 0.15
 MAX_WAIT = 1.5
 DEFAULT_INTERVAL = 0.6
+
+FRAME_SIZE = 20
+
+
+@dataclass
+class Message:
+    body: bytes  # data bytes of all frames, without frame headers
+    checksum_ok: bool
+
+
+class MessageAssembler:
+    """Rebuild messages from 20-byte frames (same rules as QZ)."""
+
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.body = bytearray()
+        self.length = 0
+        self.frames = 0
+        self.received = 0
+
+    def feed(self, frame):
+        if len(frame) != FRAME_SIZE:
+            self.reset()
+            return None
+        if frame[0] == 0xFE and frame[1] == 0x02:
+            # Bytes 4.. of a header frame repeat stale data and are ignored.
+            self.reset()
+            self.length, self.frames = frame[2], frame[3]
+            if self.frames >= 2:
+                self.received = 1
+            return None
+        if self.received == 0:
+            return None
+
+        if frame[0] == self.received - 1 and frame[1] == 0x12 and self.received < self.frames - 1:
+            if len(self.body) + 18 > self.length:
+                self.reset()
+                return None
+            self.body += frame[2:20]
+            self.received += 1
+            return None
+        if frame[0] == 0xFF and self.received == self.frames - 1:
+            count = frame[1]
+            if not 0 < count <= 18 or count != self.length - len(self.body):
+                self.reset()
+                return None
+            self.body += frame[2 : 2 + count]
+            body = bytes(self.body)
+            self.reset()
+            checksum_ok = len(body) >= 2 and sum(body[4:-1]) & 0xFF == body[-1]
+            return Message(body, checksum_ok)
+        self.reset()
+        return None
+
+
+def u16(data, offset):
+    return data[offset] | data[offset + 1] << 8
 
 
 def timestamp():
@@ -111,6 +194,12 @@ class Rower:
         self.log_notifications = log_notifications
         self.log_writes = log_writes
         self.last_notification = 0.0
+        self.queued = []
+        self.stopped = asyncio.Event()
+
+    def queue(self, steps):
+        """Send these (label, frames) steps, in order, before the next poll."""
+        self.queued.extend(steps)
 
     def on_notification(self, sender, data):
         data = bytes(data)
@@ -146,6 +235,9 @@ class Rower:
         next_at = started
         index = 0
         while duration <= 0 or loop.time() - started < duration:
+            while self.queued:
+                label, frames = self.queued.pop(0)
+                await self.send(label, frames)
             label, frames = POLL[index % len(POLL)]
             await self.send(label, frames, wait=False)
             index += 1
@@ -169,8 +261,13 @@ async def keep_alive(
     on_notification: Callable[[bytes], None] | None = None,
     log_notifications=True,
     log_writes=True,
+    on_ready: Callable[["Rower"], None] | None = None,
 ):
-    """Connect and keep the link alive. Return a process exit code."""
+    """Connect and keep the link alive. Return a process exit code.
+
+    `on_ready(rower)` is called once the connection is up; it may start tasks
+    that call `rower.queue()` and, when finished, `rower.stopped.set()`.
+    """
     if address is None:
         address = await find_address()
         if address is None:
@@ -185,12 +282,17 @@ async def keep_alive(
 
         task = asyncio.create_task(rower.run(interval, duration))
         gone = asyncio.create_task(disconnected.wait())
+        stop = asyncio.create_task(rower.stopped.wait())
+        if on_ready is not None:
+            on_ready(rower)
         try:
-            await asyncio.wait({task, gone}, return_when=asyncio.FIRST_COMPLETED)
+            await asyncio.wait({task, gone, stop}, return_when=asyncio.FIRST_COMPLETED)
         finally:
-            for pending in (task, gone):
+            for pending in (task, gone, stop):
                 pending.cancel()
-        if task.done() and not task.cancelled() and task.exception() is None:
+        if stop.done() and not stop.cancelled():
+            print("Stopped by the script.")
+        elif task.done() and not task.cancelled() and task.exception() is None:
             print("Duration elapsed.")
         elif disconnected.is_set():
             print(f"[{timestamp()}] Rower disconnected.")

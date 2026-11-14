@@ -18,7 +18,8 @@ rameur dans `src/devices/proformrower/proformrower.cpp`).
 - Essais Bleak sous Linux : `bleak/01-connection.py` (essais successifs,
   historique) et `bleak/02-connection.py` (script de référence ; le code
   partagé de connexion, d’init et de poll est dans `bleak/rower.py`) et
-  `bleak/03-telemetry.py` (lecture des métriques).
+  `bleak/03-telemetry.py` (lecture des métriques) et `bleak/04-start-session.py`
+  (démarrage de session ; essai réel du 2026-11-14 avec `--force`, voir plus bas).
 - Portage Web Bluetooth : `web/protocol.js` (trames et décodage),
   `web/rower.js` (connexion et poll). Tests sans matériel dans
   `web/protocol.test.js` et `web/rower.test.js` ; toutes les trames écrites
@@ -195,7 +196,89 @@ Prochaine expérience : décoder les champs restants (octets 15–16 de `ff 11`,
 compteurs et valeur 24 bits du message de 50 octets) en les comparant à
 l’affichage du rameur (temps, calories…).
 
-## Écritures d’état `fe 02 0d 02` (non rejouées)
+## État du rameur et commande de démarrage (analyse du 2026-11-14)
+
+Analyse de `btsnoop_hci-start.log` (50 min, 13 connexions iFit, 6 démarrages ;
+script d’analyse ponctuel non conservé, rejeu partiel via `04-start-session.py`).
+
+**Fait observé (capture iFit, poll `18`/`19`)** : l’octet 21 du corps du
+message de 50 octets (`01 04 02 2e …`, offset de `03-telemetry.py`) donne
+l’état du rameur : 1 = repos, 2 = en cours, 3 = en pause, 4 = terminé.
+**Avec notre poll `17`/`19`, la disposition est différente** (voir « Essai réel »
+plus bas) : ne pas appliquer ces offsets à `03-telemetry.py`/`04-start-session.py`. Il change 0,3 à 1,1 s après
+chaque écriture `0d` d’iFit, selon son dernier octet de données : `02` →
+2 (start), `03` → 3 (stop), `04` → 4 (end), `01` → 1 (retour au repos), `0d`
+(vu une fois, après un stop) → 2. L’octet 22 est un compteur qui monte
+d’environ 1 par seconde en état 2 et reste figé en état 3 et 4 ; il revient à 0
+en état 1 (hypothèse : temps écoulé en s). Un start depuis l’état 1 repart de
+0 ; depuis l’état 3, le compteur continue (vu : 17 → 17, puis 37 → 38 après
+une pause). Quand la liaison tombe pendant une session, la session reparaît en
+pause à la connexion suivante.
+
+**Séquence d’iFit pour démarrer** (6 occurrences, toujours identiques, depuis
+l’état 1 ou 3) :
+
+1. message `17` avec l’octet d’indicateur à 0 : `fe 02 17 03`,
+   `00 12 02 04 02 13 14 13 02 0c 00…`, `ff 05 00 80 00 00 b5 00…`
+   (l’init d’iFit et de QZ envoie la même trame avec `80 01 00 b6`) ;
+2. 0,1 à 0,4 s plus tard : `fe 02 0d 02`, puis
+   `ff 0d 02 04 02 09 14 09 02 02 00 10 02 00 33 00…` ;
+3. environ 0,4 s plus tard, iFit envoie en boucle (≈ 1 Hz) `fe 02 0c 02` +
+   `ff 0c 02 04 02 08 14 08 02 00 02 00 10 30 00…` (une variante `…00 02 22` une
+   fois, 1 à 3 s après le début de la boucle). Ce message est aussi envoyé sans start dans certaines
+   connexions ; son rôle est inconnu et `04-start-session.py` ne l’envoie pas.
+
+À l’arrêt (iFit) : `0d` états `03` (stop), `04` (end), puis `17` avec
+`80 01 00 b6` et `0d` état `01`. Octet de contrôle de ces `ff 0d` : somme des
+5 octets de données (`02 00 10 <état> 00`) + `0x1f`, vérifiée sur 5 valeurs
+d’état ; même constante pour la résistance de QZ (`01 04 76 01 00` → `9b`).
+Dans une seule connexion (la première, avant le premier start), iFit envoie en
+plus des messages `11` (×3) et `15` (`ff 03 02 00 0a`), jamais revus ensuite :
+probablement sans lien avec le start.
+
+**Validé par l’utilisateur le 2026-11-14** : `04-start-session.py --send --force`
+(init et poll `17`/`19` de QZ, puis la séquence ci-dessus) fait biper le rameur
+et démarrer son chrono. Donc le start est accepté avec le poll `17`/`19` et
+sans les échanges `0b`, `10`, `11` d’iFit.
+
+### Essai réel du 2026-11-14 (21:00-21:09, `04-start-session.py`, poll `17`/`19`)
+
+**Corrige l’hypothèse précédente** : `--force` n’était nécessaire que parce que
+le script lisait l’état au mauvais octet (21, valable pour la capture iFit).
+Avec le poll `17`/`19`, le message de 50 octets (checksum correcte sur les 4
+exemples) contient :
+
+| Octet du corps | Valeur observée |
+| --- | --- |
+| 25 | **état** : 1 avant le start (rameur branché, chrono arrêté), 2 après le start (chrono en marche), 3 en pause (chrono arrêté après quelques coups de rame) |
+| 21, 26, 30 | compteur de secondes (identique aux trois octets en marche : 1, 2, 3… ; 0x96 = 150 en pause) ; 30 reste à 0 en pause |
+| 19 | 1 juste après le branchement, 0 ensuite (rôle inconnu) |
+| 20 | 1 dans tous les exemples (rôle inconnu) |
+
+Résultats (utilisateur : bip et chrono constatés sur le rameur) :
+
+- sans `--send` : rien n’est envoyé, le chrono ne démarre pas (essais avec et
+  sans `--force`) ;
+- `--send --force`, rameur au repos : le message `17` puis `0d` état 2 fait
+  passer l’état de 1 à 2 en 1,5 s ; le compteur monte d’environ 1 par seconde et le
+  chrono du rameur continue après la fin du script (aucune commande d’arrêt
+  n’est envoyée) ; le rameur passe en pause (3) quand on cesse de ramer ;
+- même commande depuis l’état 3 : l’état repasse à 2 et le chrono **reprend sans
+  se remettre à zéro** (compteur 150 → 151…), comme dans la capture iFit.
+
+Les valeurs 4 (terminé) et 5, 7, 8… affichées par la première version du
+script étaient le compteur de secondes, pas un état.
+
+**Validation de la correction (2026-11-14, 21:19-21:20)** : sans option, le script
+lit « idle (1), counter 0 » et n’envoie rien ; avec `--send` (sans `--force`), il
+envoie le start, lit « running (2), counter 1 » 1,5 s plus tard, et le chrono du
+rameur démarre (confirmé par l’utilisateur).
+
+**Non établi** : la remise à zéro du chrono (probablement `0d` états `04` puis
+`01`, vus chez iFit, jamais envoyés par nos scripts), le rôle des octets 19 et 20 et des
+messages `0c`, la valeur de l’état « terminé » avec notre poll.
+
+## Écritures d’état `fe 02 0d 02` (captures)
 
 Les captures iFit `…202611081036.log` et `…start.log` associent le couple
 `fe 02 0d 02` puis une écriture de 20 octets `ff 0d …` (moins de 300 ms plus
@@ -203,7 +286,7 @@ tard) aux actions start, stop, end, pause, reprise et résistance 2 et 3 (0,3 à
 0,6 s après l’action ; une occurrence 2,2 s avant le start). Aucune occurrence
 pour un réglage manuel à 24 sur le rameur ni pour les coups de rame.
 
-Payloads de la capture `start` : start
+Payloads de la capture `start` (décodés plus haut) : start
 `ff0d020402091409020200100200330000000000`, stop `…100300340000000000`, end
 `…100400350000000000`, puis `…100100320000000000` après la fin. Le dernier
 octet non nul semble être une somme de contrôle (hypothèse).

@@ -11,11 +11,10 @@ Usage: poetry run python 03-telemetry.py [--raw] [--all] [--duration 60]
 
 import argparse
 import asyncio
-from dataclasses import dataclass
 
 from bleak.exc import BleakError
 
-from rower import add_connection_arguments, keep_alive, timestamp
+from rower import FRAME_SIZE, MessageAssembler, add_connection_arguments, keep_alive, timestamp, u16
 
 # Resistance level from the raw byte (QZ, GetResistanceFromPacket).
 RESISTANCE_LEVELS = {
@@ -24,64 +23,6 @@ RESISTANCE_LEVELS = {
     0x15: 13, 0x16: 14, 0x18: 15, 0x19: 16, 0x1A: 16, 0x1B: 17, 0x1D: 18,
     0x1E: 19, 0x20: 20, 0x22: 21, 0x23: 22, 0x25: 23, 0x26: 24, 0x27: 24,
 }
-FRAME_SIZE = 20
-
-
-@dataclass
-class Message:
-    body: bytes  # data bytes of all frames, without frame headers
-    checksum_ok: bool
-
-
-class MessageAssembler:
-    """Rebuild messages from 20-byte frames (same rules as QZ)."""
-
-    def __init__(self):
-        self.reset()
-
-    def reset(self):
-        self.body = bytearray()
-        self.length = 0
-        self.frames = 0
-        self.received = 0
-
-    def feed(self, frame):
-        if len(frame) != FRAME_SIZE:
-            self.reset()
-            return None
-        if frame[0] == 0xFE and frame[1] == 0x02:
-            # Bytes 4.. of a header frame repeat stale data and are ignored.
-            self.reset()
-            self.length, self.frames = frame[2], frame[3]
-            if self.frames >= 2:
-                self.received = 1
-            return None
-        if self.received == 0:
-            return None
-
-        if frame[0] == self.received - 1 and frame[1] == 0x12 and self.received < self.frames - 1:
-            if len(self.body) + 18 > self.length:
-                self.reset()
-                return None
-            self.body += frame[2:20]
-            self.received += 1
-            return None
-        if frame[0] == 0xFF and self.received == self.frames - 1:
-            count = frame[1]
-            if not 0 < count <= 18 or count != self.length - len(self.body):
-                self.reset()
-                return None
-            self.body += frame[2 : 2 + count]
-            body = bytes(self.body)
-            self.reset()
-            checksum_ok = len(body) >= 2 and sum(body[4:-1]) & 0xFF == body[-1]
-            return Message(body, checksum_ok)
-        self.reset()
-        return None
-
-
-def u16(data, offset):
-    return data[offset] | data[offset + 1] << 8
 
 
 def pace_fields(pace):
