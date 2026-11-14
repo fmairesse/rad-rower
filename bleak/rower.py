@@ -97,11 +97,14 @@ POLL = (
     ),
 )
 
-# Session state commands, copied from iFit captures (not from QZ). The rower
-# reports its state in the 50-byte message. With the 17/19 poll the state is
-# byte 25 (1 idle, 2 running, 3 paused; 4 finished is only seen in iFit
-# captures, where the 18/19 poll puts the state at byte 21) and byte 21 is a
-# counter of seconds. Only START is replayed by scripts for now.
+# Session state commands, copied from iFit captures (not from QZ). The `ff 0d`
+# frame ends with the state to reach (02 start/resume, 03 pause, 04 end, 01
+# idle) and a checksum (state + 0x31). iFit sends a `17` message before a start
+# (flag byte 0) and before the return to idle (flag byte 1).
+# The rower reports its state in the 50-byte message. With the 17/19 poll the
+# state is byte 25 (1 idle, 2 running, 3 paused; 4 finished is only seen in
+# iFit captures, where the 18/19 poll puts the state at byte 21) and byte 21 is
+# a counter of seconds.
 H0D = "fe020d02"
 START = (
     (
@@ -113,6 +116,19 @@ START = (
         ),
     ),
     ("start", message(H0D, "ff0d020402091409020200100200330000000000")),
+)
+PAUSE = (("pause", message(H0D, "ff0d020402091409020200100300340000000000")),)
+END = (("end", message(H0D, "ff0d020402091409020200100400350000000000")),)
+IDLE = (
+    (
+        "17 before idle",
+        message(
+            H17,
+            "0012020402131413020c00000000000000000000",
+            "ff0500800100b600000000000000000000000000",
+        ),
+    ),
+    ("idle", message(H0D, "ff0d020402091409020200100100320000000000")),
 )
 STATE_BYTE = 25
 COUNTER_BYTE = 21

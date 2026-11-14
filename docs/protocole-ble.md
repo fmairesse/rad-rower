@@ -19,7 +19,9 @@ rameur dans `src/devices/proformrower/proformrower.cpp`).
   historique) et `bleak/02-connection.py` (script de référence ; le code
   partagé de connexion, d’init et de poll est dans `bleak/rower.py`) et
   `bleak/03-telemetry.py` (lecture des métriques) et `bleak/04-start-session.py`
-  (démarrage de session ; essai réel du 2026-11-14 avec `--force`, voir plus bas).
+  (démarrage de session ; essai réel du 2026-11-14, voir plus bas) et
+  `bleak/05-start-pause-stop.py` (start, pause, reprise, arrêt ; essai réel
+  validé le 2026-11-14).
 - Portage Web Bluetooth : `web/protocol.js` (trames et décodage),
   `web/rower.js` (connexion et poll). Tests sans matériel dans
   `web/protocol.test.js` et `web/rower.test.js` ; toutes les trames écrites
@@ -274,9 +276,33 @@ lit « idle (1), counter 0 » et n’envoie rien ; avec `--send` (sans `--force`
 envoie le start, lit « running (2), counter 1 » 1,5 s plus tard, et le chrono du
 rameur démarre (confirmé par l’utilisateur).
 
-**Non établi** : la remise à zéro du chrono (probablement `0d` états `04` puis
-`01`, vus chez iFit, jamais envoyés par nos scripts), le rôle des octets 19 et 20 et des
-messages `0c`, la valeur de l’état « terminé » avec notre poll.
+### Cycle complet validé (2026-11-14, 21:28-21:29, `05-start-pause-stop.py`)
+
+Le script envoie, à 10 s d’intervalle, start, pause, reprise, puis pause + `0d`
+état 4 + `17` (`80 01 00 b6`) + `0d` état 1, chaque envoi attendant l’état
+attendu (octet 25). Trames : voir `START`, `PAUSE`, `END`, `IDLE` dans
+`bleak/rower.py` (copiées de la capture iFit). Résultat confirmé par
+l’utilisateur : le chrono démarre, se met en pause à 11 s, reprend, puis s’arrête
+complètement à l’envoi du stop avec 3 bips (fin de session).
+
+| Envoi | État lu (octet 25) | Compteur (octet 21) | Délai de confirmation |
+| --- | --- | --- | --- |
+| start | 2 | 0 | 1,6 s |
+| pause | 3 | 11 | 0,7 s |
+| reprise | 2 | 11 (continue) | 1,2 s |
+| pause (stop) | 3 | 22 | 1,2 s |
+| `0d` état 4 | **4 (terminé)**, compteur figé | 22 | 1,1 s |
+| `17` + `0d` état 1 | 1 (repos) | revient à 0 | 1,6 s |
+
+L’état 4 est donc visible avec notre poll `17`/`19`, au même octet 25 que les
+autres états. Le retour au repos remet le compteur à 0. Octets 19 et 20
+(hypothèses, non testées) : en repos juste après le branchement 19 = 20 = 1 ;
+pendant la session 19 = 0 et 20 = 1 ; en repos après une session 19 = 20 = 0.
+Rôle exact inconnu.
+
+**Non établi** : le rôle des octets 19 et 20 et des messages `0c`, l’effet de
+chaque trame prise isolément (par exemple si le `17` avant `0d` est nécessaire)
+et le comportement d’un arrêt depuis l’état 2 sans pause préalable.
 
 ## Écritures d’état `fe 02 0d 02` (captures)
 

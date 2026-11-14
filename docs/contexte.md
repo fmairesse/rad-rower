@@ -41,7 +41,15 @@ repos. **Essai réel du 2026-11-14 : validé** (bip, chrono démarré, état 1 �
 dans le message de 50 octets, octet 25 avec notre poll ; depuis la pause, le
 chrono reprend sans remise à zéro). Après correction de l’octet d’état,
 `--send` sans `--force` depuis le repos démarre le chrono (confirmé le soir
-même) ; `--force` n’est plus nécessaire. `03-telemetry.py` et `04` partagent désormais
+même) ; `--force` n’est plus nécessaire.
+
+`bleak/05-start-pause-stop.py` enchaîne start, pause 10 s plus tard, reprise
+10 s plus tard, puis arrêt (pause, `0d` état 4, retour au repos) 10 s plus
+tard, en confirmant chaque état avant de continuer. **Cycle complet validé par
+l’utilisateur le 2026-11-14 sur le rameur** : chrono démarré, mis en pause à
+11 s, repris, arrêté avec 3 bips de fin de session ; états 2, 3, 2, 3, 4, 1 lus
+à l’octet 25 du message de 50 octets. Détails : notes de protocole.
+`03-telemetry.py` et `04` partagent désormais
 l’assembleur de messages de `bleak/rower.py`.
 
 ## Acquis vérifiés
@@ -61,7 +69,7 @@ l’assembleur de messages de `bleak/rower.py`.
   cadence du 750R chez QZ) restent à 0 avec le poll `17`/`19`.
 - L’état du rameur suit les écritures `ff 0d …` d’iFit : 1 repos, 2 en cours,
   3 pause, 4 terminé (octet 21 du message de 50 octets avec le poll d’iFit,
-  octet 25 avec le nôtre). Seul le start (état 2) a été envoyé par nos scripts.
+  octet 25 avec le nôtre). Start, pause, reprise, fin et retour au repos ont été envoyés par `05-start-pause-stop.py` et validés.
 - Cadence minimale de poll tolérée, utilité de chaque échange d’init et état
   du voyant iFit pendant la connexion : à vérifier.
 
@@ -71,9 +79,9 @@ Aucun.
 
 ## Prochaine étape
 
-Décider s’il faut ajouter la remise à zéro du chrono (`0d` états 4 puis 1,
-déjà décodés dans les captures iFit, jamais envoyés ; accord explicite
-requis). Ensuite, tester `web/` sur le vrai rameur dans un navigateur
+Intégrer l’état du rameur et les commandes start/pause/reprise/arrêt dans
+`web/` ou directement dans l’application Android (le cycle Bleak est validé).
+Tester `web/` sur le vrai rameur dans un navigateur
 compatible : stabilité, comparaison des sept métriques avec la console,
 déconnexion et reconnexion. Puis décoder les champs restants en les comparant
 à l’affichage du rameur (temps, calories…) et préparer la lecture dans
