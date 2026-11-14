@@ -17,7 +17,8 @@ rameur dans `src/devices/proformrower/proformrower.cpp`).
 - Code de QZ (source externe, branche « Sport RL »).
 - Essais Bleak sous Linux : `bleak/01-connection.py` (essais successifs,
   historique) et `bleak/02-connection.py` (script de référence ; le code
-  partagé de connexion, d’init et de poll est dans `bleak/rower.py`).
+  partagé de connexion, d’init et de poll est dans `bleak/rower.py`) et
+  `bleak/03-telemetry.py` (lecture des métriques).
 
 ## Services GATT (capture iFit)
 
@@ -124,43 +125,63 @@ session ; sens inconnu.
 | En-tête | Usage observé | Sens |
 | --- | --- | --- |
 | `08`, `0a`, `0b`, `2c` | initialisation, une fois | inconnu (`2c` = 44 octets) |
-| `17`, `18`, `19` | poll périodique ; la réponse est une série de notifications | `18`/`19` : métriques (voir ci-dessous) |
+| `17`, `18`, `19` | poll périodique ; la réponse est une série de notifications | métriques (voir ci-dessous) ; correspondance poll → réponse non établie |
 | `10`, `11` | fin de l’initialisation d’iFit | inconnu |
 | `0d` | changements d’état d’iFit (start, stop, pause, reprise, résistance) | voir plus bas |
 
-## Notifications et métriques sans session (2026-11-12)
+## Notifications et métriques (2026-11-12 à 2026-11-14)
 
-Les polls produisent des notifications (messages `fe 02 21 03`, 33 octets, et
-`fe 02 32 04`, 50 octets) ; il n’y a pas de notification spontanée entre deux
-polls. Aucune session n’est nécessaire : sans rame tous les champs restent à 0,
-avec des coups de rame les mêmes messages portent des valeurs qui évoluent
-(`only-connect.log` comparé à `row-nostart.log`).
+Les polls produisent des notifications ; il n’y a pas de notification
+spontanée entre deux polls. Aucune session n’est nécessaire : sans rame les
+valeurs restent à 0, avec des coups de rame elles évoluent.
 
-Champs qui changent (offsets 0-indexés dans la trame de 20 octets, après
-l’en-tête) :
+**Messages de réponse** (réassemblés comme décrit plus haut). Avec le poll
+`17`/`19` de `02-connection.py`/`03-telemetry.py`, on reçoit en alternance :
 
-| Réponse | Trame | Octet(s) | Comportement observé |
+- un message de 50 octets (`fe 02 32 04`, premier octet de données
+  `01 04 02 2e 14 2e 02 02`) ;
+- une trame isolée `ff 11 00 00 00 00 00 00 00 00 …` (message de 17 octets).
+
+Un message de 33 octets (`fe 02 21 03`, `01 04 02 1d 14 1d 02 02`) apparaît
+dans les captures iFit et dans les essais avec poll `18`/`19`, mais pas avec
+`17`/`19`. La correspondance exacte poll → réponse n’est pas établie. Les octets
+4 à 19 d’une trame d’en-tête de notification répètent des données périmées et
+sont ignorés. Dans les messages de 50 octets, le dernier octet est la somme des
+octets 4 à avant-dernier, modulo 256.
+
+**Valeurs validées par l’utilisateur (2026-11-14)** (essai réel avec
+`03-telemetry.py` ; méthode de comparaison non détaillée) :
+
+| Grandeur | Source | Offset | Remarque |
 | --- | --- | --- | --- |
-| `18` | `00 12 ..` | 12, 14 | 0 au repos ; 0x19→0x2d→0x37→0x30 (octet 12), 0x11→0x34 croissant (octet 14) |
-| `18` | `01 12 ..` | 6 et 10 (égaux) | 0x12→0x22, +1 par seconde environ (compteur de temps ?) |
-| `18` | `01 12 ..` | 14–16 | valeur 24 bits LE croissante ; 0 au repos |
-| `18` | `ff 0e ..` | 3, 12 | octet 12 : 0→4 en 15 s (coups ?) ; octet 3 croissant 0→0x14 |
-| `19` | `ff 0f ..` | 11, 13, 16–19 | change par paliers |
+| puissance (W) | message de 50 octets, corps | 10–11 LE | |
+| distance (m) | message de 50 octets, corps | 12–13 LE | |
+| résistance (niveau 1–24) | message de 50 octets, corps | 9, table de QZ | l’octet vaut 0 tant que la résistance n’a pas été changée sur le rameur (niveau inconnu) ; 1 après réglage |
+| cadence (coups/min) | trame `ff 11` | 12 | |
+| nombre de coups | trame `ff 11` | 10–11 LE | trouvé sur notre rameur, absent de QZ ; 36 → 37 sur l’essai suivant |
+| allure (s pour 500 m) | trame `ff 11` | 13–14 LE | 275 s = 4:35 ; 330 s = 5:30 |
+| vitesse (km/h) | calculée | 1800 / allure | formule de QZ, 6,55 et 5,45 km/h |
 
-Ces interprétations reposent seulement sur le sens de variation ; le nombre et
-l’instant des coups de rame n’ont pas été notés.
+Résultat inattendu : avec le poll `17`/`19`, les offsets 46–48 du message de
+50 octets (coups et cadence du 750R chez QZ) valent toujours 0, alors que le
+décodage hors ligne de la capture iFit `row-nostart` (poll `18`/`19`) y trouvait
+des valeurs non nulles (coups 2 à 4, cadence 18 puis 12). Hypothèse : le contenu
+de la réponse dépend de la requête de poll (les écritures `17` et `18` diffèrent).
+Avec `17`/`19`, la cadence vient de la trame `ff 11`.
 
-**Information externe (QZ, non vérifiée sur notre rameur)** : pour le Sport RL,
-QZ lit dans une trame `00 12 01 04 02 (2e|30|31) …` la puissance (octets 12–13,
-LE), la résistance (octet 11, via une table de conversion) et la distance
-(octets 14–15 ÷ 1000), et dans une trame `ff 11 …` la cadence (octet 12) et la
-vitesse (`60 / (octets 14:13) × 30`). Pour le 750R, QZ décode des messages de
-50 octets (coups aux octets 46–47, cadence 48) et de 33 octets (allure aux
-octets 27–28).
+**Trame `ff 11`** : `ff 11`, 8 octets à 0, puis nombre de coups (octets 10–11),
+cadence (12), allure en s/500 m (13–14), deux octets non décodés (15, 16 : vus
+`bd 00`, `be 00`, `07 01`, `09 01`), un octet à 0 (17), une somme de contrôle (18 :
+somme des octets 10 à 17 plus 0x2f, modulo 256 ; vérifiée sur 4 trames) et un
+octet à `ff` (19).
 
-Prochaine expérience : enregistrer les notifications de `02-connection.py` en
-notant le nombre et l’instant exacts des coups, puis comparer aux champs
-ci-dessus et aux formules de QZ.
+Autres champs du message de 50 octets, non décodés : trois compteurs égaux (corps
+20, 25, 29–30) qui augmentent d’environ 1 par seconde (temps ?), une valeur
+24 bits LE croissante (corps 34–36), un octet qui décroît lentement (corps 40).
+
+Prochaine expérience : décoder les champs restants (octets 15–16 de `ff 11`,
+compteurs et valeur 24 bits du message de 50 octets) en les comparant à
+l’affichage du rameur (temps, calories…).
 
 ## Écritures d’état `fe 02 0d 02` (non rejouées)
 

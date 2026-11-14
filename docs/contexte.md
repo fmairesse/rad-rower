@@ -18,20 +18,27 @@ résistance. Les trames viennent de QZ (qdomyos-zwift, branche Sport RL) et ont
 liaison environ 10 s après le dernier. Détails, historique des essais et
 limites : [notes de protocole BLE](protocole-ble.md).
 
+`bleak/03-telemetry.py` (réutilise `bleak/rower.py`) réassemble les
+notifications en messages et décode les métriques. Validés par l’utilisateur
+le 2026-11-14 après un essai réel : puissance (W), distance (m), résistance
+(`unset` tant qu’elle n’a pas été changée sur le rameur), cadence
+(coups/min), nombre de coups, allure (s/500 m) et vitesse (trame `ff 11`).
+
 ## Acquis vérifiés
 
 - Environnement : adaptateur Bluetooth et `bluetoothctl` 5.72 disponibles ;
   Bleak fonctionne (`poetry` dans `bleak/`) ; le rameur s’annonce `I_RW`.
 - Services GATT, UUID, cadrage des messages (`fe 02 …` / `00 12` / `ff …`) et
   poll d’iFit : voir les notes de protocole.
-- Sans session démarrée, les notifications des polls portent déjà des valeurs
-  qui évoluent avec les coups de rame ; le décodage reste à faire.
+- Sans session démarrée, les polls renvoient déjà les métriques validées
+  ci-dessus (offsets dans les notes de protocole).
 
 ## Hypothèses et inconnues
 
-- Le sens des échanges d’init (`08`, `0a`, `2c`, `17`) et des champs des
-  notifications est inconnu ; les formules de QZ pour le Sport RL ne sont pas
-  vérifiées sur notre rameur.
+- Le sens des échanges d’init (`08`, `0a`, `2c`, `17`) est inconnu.
+- Champs non décodés : octets 15–16 de la trame `ff 11`, compteurs et valeur
+  24 bits du message de 50 octets. Les offsets 46–48 de ce message (coups,
+  cadence du 750R chez QZ) restent à 0 avec le poll `17`/`19`.
 - Les écritures `fe 02 0d 02` / `ff 0d …` sont corrélées aux changements
   d’état d’iFit (start, stop, résistance) mais n’ont jamais été envoyées.
 - Cadence minimale de poll tolérée, utilité de chaque échange d’init et état
@@ -43,11 +50,10 @@ Aucun.
 
 ## Prochaine étape
 
-Enregistrer les notifications de `02-connection.py` pendant des coups de rame
-dont le nombre et l’instant sont notés, puis les comparer aux champs observés
-et aux formules de QZ pour décoder cadence, puissance, distance et résistance.
-Ne pas envoyer de commande modifiant le rameur (résistance, start/stop) sans
-accord explicite.
+Décoder les champs restants (voir ci-dessus) en les comparant à l’affichage du
+rameur (temps, calories…), puis préparer la lecture de ces métriques dans
+l’application Android. Ne pas envoyer de commande modifiant le rameur
+(résistance, start/stop) sans accord explicite.
 
 ## Documents associés
 

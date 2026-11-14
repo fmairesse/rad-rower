@@ -105,10 +105,11 @@ def timestamp():
 
 
 class Rower:
-    def __init__(self, client, on_notification=None, log_notifications=True):
+    def __init__(self, client, on_notification=None, log_notifications=True, log_writes=True):
         self.client = client
         self.on_notification_callback = on_notification
         self.log_notifications = log_notifications
+        self.log_writes = log_writes
         self.last_notification = 0.0
 
     def on_notification(self, sender, data):
@@ -121,7 +122,8 @@ class Rower:
 
     async def send(self, label, frames, wait=True):
         for frame in frames:
-            print(f"[{timestamp()}] >> {frame.hex(' ')} // {label}", flush=True)
+            if self.log_writes:
+                print(f"[{timestamp()}] >> {frame.hex(' ')} // {label}", flush=True)
             await self.client.write_gatt_char(WRITE_CHAR_UUID, frame, response=True)
         if wait:
             await self.wait_quiet()
@@ -135,8 +137,10 @@ class Rower:
 
     async def run(self, interval, duration):
         loop = asyncio.get_running_loop()
+        print(f"[{timestamp()}] Init: {sum(len(f) for _, f in SETUP)} writes...", flush=True)
         for label, frames in SETUP:
             await self.send(label, frames)
+        print(f"[{timestamp()}] Init done, polling.", flush=True)
 
         started = loop.time()
         next_at = started
@@ -164,6 +168,7 @@ async def keep_alive(
     duration=0,
     on_notification: Callable[[bytes], None] | None = None,
     log_notifications=True,
+    log_writes=True,
 ):
     """Connect and keep the link alive. Return a process exit code."""
     if address is None:
@@ -175,7 +180,7 @@ async def keep_alive(
     disconnected = asyncio.Event()
     async with BleakClient(address, disconnected_callback=lambda _: disconnected.set()) as client:
         print("Connected.")
-        rower = Rower(client, on_notification, log_notifications)
+        rower = Rower(client, on_notification, log_notifications, log_writes)
         await client.start_notify(NOTIFY_CHAR_UUID, rower.on_notification)
 
         task = asyncio.create_task(rower.run(interval, duration))
