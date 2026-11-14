@@ -1,6 +1,6 @@
 # Notes de protocole BLE
 
-Dernière mise à jour : 2026-11-14.
+Dernière mise à jour : 2026-11-15.
 
 Abréviation : « QZ » = projet qdomyos-zwift (dossier `qdomyos-zwift/`, code du
 rameur dans `src/devices/proformrower/proformrower.cpp`).
@@ -21,7 +21,8 @@ rameur dans `src/devices/proformrower/proformrower.cpp`).
   `bleak/03-telemetry.py` (lecture des métriques) et `bleak/04-start-session.py`
   (démarrage de session ; essai réel du 2026-11-14, voir plus bas) et
   `bleak/05-start-pause-stop.py` (start, pause, reprise, arrêt ; essai réel
-  validé le 2026-11-14).
+  validé le 2026-11-14) et `bleak/08-set-resistance.py` (consigne de résistance
+  QZ, essai réel du niveau 12 le 2026-11-15, voir plus bas).
 - Portage Web Bluetooth : `web/protocol.js` (trames et décodage),
   `web/rower.js` (connexion et poll). Tests sans matériel dans
   `web/protocol.test.js` et `web/rower.test.js` ; toutes les trames écrites
@@ -384,8 +385,29 @@ octet non nul semble être une somme de contrôle (hypothèse).
 **Information externe (QZ)** : pour régler la résistance 1–24, QZ envoie
 `fe 02 0d 02` puis un `ff 0d 02 04 02 09 14 09 02 01 04 …` dont quelques octets
 varient selon le niveau (niveau 1 : `76 01 00 9b`, niveau 24 : `e6 26 00 30`).
-Ce format diffère de celui d’iFit ci-dessus. Ne jamais envoyer ces écritures
-sans accord explicite et protocole d’essai convenu.
+Le code local de QZ (`src/devices/proformrower/proformrower.cpp`,
+`proformrower::forceResistance`) contient les 24 niveaux pour le Sport RL et
+envoie d’abord le déverrouillage `fe 02 0d 02`, puis la trame du niveau. Pour le
+niveau 12, la trame est `ff 0d 02 04 02 09 14 09 02 01 04 5e 13 00 95 00 00 00 00 00`.
+Ce format diffère de celui d’iFit ci-dessus.
+
+### Essai réel de résistance (2026-11-15)
+
+- Script : `bleak/08-set-resistance.py --level 12 --send` ; le dry-run avait
+  reproduit la trame QZ ci-dessus sans se connecter.
+- Premier essai : le rameur était éteint; scan `I_RW` infructueux, aucune
+  écriture envoyée.
+- Second essai, rameur allumé : connexion réussie; état 1 (repos) et résistance
+  initiale `raw=0x00` observés avant l’écriture.
+- Le script a envoyé `fe 02 0d 02`, puis la trame du niveau 12. La télémétrie
+  suivante a rapporté l’état 1 et `raw=0x13`, décodé niveau 12 par la table QZ.
+  Changement confirmé en environ une seconde; la résistance avait auparavant
+  été non réglée.
+- Portée : essai matériel concluant pour le niveau 12. Les autres niveaux sont
+  présents dans la table QZ, mais n’ont pas été testés sur notre rameur.
+
+Ne pas envoyer de consigne de résistance sans accord explicite et protocole
+d’essai convenu.
 
 ## Règles de consignation
 

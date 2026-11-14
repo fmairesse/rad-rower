@@ -1,6 +1,6 @@
 # Contexte du projet
 
-Dernière mise à jour : 2026-11-14.
+Dernière mise à jour : 2026-11-15.
 
 ## Objectif
 
@@ -21,7 +21,7 @@ limites : [notes de protocole BLE](protocole-ble.md).
 `bleak/03-telemetry.py` (réutilise `bleak/rower.py`) réassemble les
 notifications en messages et décode les métriques. Validés par l’utilisateur
 le 2026-11-14 après un essai réel : puissance (W), distance (m), résistance
-(`unset` tant qu’elle n’a pas été changée sur le rameur), cadence
+(`unset` tant qu’elle n’a pas été réglée), cadence
 (coups/min), nombre de coups, allure (s/500 m) et vitesse (trame `ff 11`).
 
 `web/` propose maintenant un tableau de bord Vue 3 (CDN, sans projet Node.js)
@@ -51,6 +51,14 @@ l’utilisateur le 2026-11-14 sur le rameur** : chrono démarré, mis en pause �
 à l’octet 25 du message de 50 octets. Détails : notes de protocole.
 `03-telemetry.py` et `04` partagent désormais
 l’assembleur de messages de `bleak/rower.py`.
+
+`bleak/08-set-resistance.py` reprend la table QZ Sport RL des niveaux 1 à 24,
+avec dry-run par défaut, garde-fou sur l’état repos et confirmation par
+télémétrie. **Niveau 12 validé sur le rameur le 2026-11-15** : la résistance
+était initialement non réglée (`raw=0x00`); après l’envoi, la télémétrie a
+rapporté `raw=0x13`, soit le niveau 12. Le premier essai avait échoué au scan
+car le rameur était éteint; aucune écriture n’avait alors été faite. Détails :
+notes de protocole.
 
 ## Acquis vérifiés
 
