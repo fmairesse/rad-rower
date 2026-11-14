@@ -84,7 +84,7 @@ Distance : décodage confirmé en direct (`07-distance.py`) ; l’écart de 1,6 
 champs sont décodés (voir les notes de protocole) ; `03-telemetry.py` les affiche
 et reste à vérifier en direct sur le rameur (temps, calories, cals/hr calculées,
 puissance moyenne, durée de pause, allure moyenne). Restent inconnus : octets 16,
-19, 20, 38-39, 42, état 10, messages `0c`. Ensuite, chercher à simplifier l’init
+38-39, 42 (constants) ; 19 et 20 sont des drapeaux de l’historique depuis le branchement, messages `0c`, durée d’inactivité avant l’état 10 (probable fin automatique de session). Ensuite, chercher à simplifier l’init
 et les messages par essais, puis intégrer dans `web/` ou l’application Android
 (et tester `web/` sur le vrai rameur).
 Ne pas envoyer de commande modifiant le rameur

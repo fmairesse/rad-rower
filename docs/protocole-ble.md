@@ -295,10 +295,8 @@ complètement à l’envoi du stop avec 3 bips (fin de session).
 | `17` + `0d` état 1 | 1 (repos) | revient à 0 | 1,6 s |
 
 L’état 4 est donc visible avec notre poll `17`/`19`, au même octet 25 que les
-autres états. Le retour au repos remet le compteur à 0. Octets 19 et 20
-(hypothèses, non testées) : en repos juste après le branchement 19 = 20 = 1 ;
-pendant la session 19 = 0 et 20 = 1 ; en repos après une session 19 = 20 = 0.
-Rôle exact inconnu.
+autres états. Le retour au repos remet le compteur à 0. Octets 19 et 20 : voir le
+tableau des champs plus bas (drapeaux liés à l’historique depuis le branchement).
 
 ### Décodage des champs restants (2026-11-14, `06-read-session.py`, poll `17`/`19`)
 
@@ -319,8 +317,12 @@ Offsets du corps du message de 50 octets (`01 04 02 2e …`) :
 | 8-9 | niveau de résistance × 416 (1248, 2496, 4992 pour 3, 6, 12) ; cohérent avec l’octet 9 de la table de QZ | cohérent avec le décodage existant, relevés de niveau non faits |
 | 40 | puissance moyenne en W, sur le temps de marche | **fortement probable** : égale à la moyenne temporelle des octets 10 à ±3 W sur les sessions 2, 3 et 4 |
 | 45 | durée cumulée des pauses en s (le rameur se met en pause seul quand on arrête de ramer) | **probable** : 12 puis 24 s et 6 puis 12 s, pauses relevées dans les logs 2 et 4 |
-| 25 | état : 1, 2, 3, 4 comme avant ; vu **10** (0x0a) avant le start de `session-4` (juste au branchement, restes de la session précédente dans les autres octets) | 10 : inconnu |
-| 16, 38-39, 42 | constants (`46`, `2c 01`, `b4`) | inconnu |
+| 25 | état : 1, 2, 3, 4 comme avant ; vu **10** (0x0a) avant le start de `session-4`, juste au branchement, avec les restes d’une session précédente (temps 298 s sur 16 bits aux octets 30-31, calories ≈ 0,1) | **10 : hypothèse** : session arrêtée par le rameur après inactivité (voir ci-dessous) |
+| 19 | 1 au premier message de `session-1` (rameur juste branché, jamais démarré), 0 dans tous les autres messages (459 analysés) | **drapeau** : probablement « pas encore démarré depuis le branchement », effacé au premier start |
+| 20 | 1 depuis le branchement jusqu’au premier retour au repos (`0d` état 1), 0 ensuite, y compris pendant les sessions suivantes | **drapeau** : `session-1` (1 jusqu’à l’état 1 final), `session-2` (rameur déjà en marche à la connexion, 1 jusqu’à l’état 1 final), `session-3` et `session-4` (toujours 0) ; hypothèse : « aucune session terminée depuis le branchement » |
+| 16, 38-39, 42 | constants sur 459 messages, 3 résistances différentes : `46` (70), `2c 01` (300), `b4` (180) | inconnu ; peut-être la configuration du rameur ou de l’utilisateur (hypothèse sans preuve) |
+| 14-15, 17-18, 22-24, 27-29, 32-33, 37, 41, 43-44, 46-48 | toujours 0 sur 459 messages (les offsets 46-48 contiennent les coups et la cadence du 750R chez QZ) | inutilisés avec ce poll, ou jamais activés |
+| 31 | octet haut du temps de l’octet 30 (1 une fois, avec 298 s) ; 22 et 27 (octets hauts de 21 et 26) restent à 0 | le temps passe de 255 s : à décoder en u16 aux octets 30-31 (et probablement 21-22, 26-27) |
 
 `ff 11`, octets 15-16 (u16 LE) : allure moyenne en s/500 m, **fortement probable**.
 Elle reste figée en pause alors que l’allure instantanée tombe à 0 et vaut
@@ -335,6 +337,16 @@ message) sont à environ 0,62 × le message, soit 1 / 1,609 (facteur km → mile
 Confirmé par l’utilisateur : la console était alors en miles (unités
 impériales). L’explication d’un relevé décalé ne tient pas (une lecture tardive
 donnerait une valeur plus grande, pas plus petite).
+
+**État 10** (récit de l’utilisateur, non journalisé) : un premier lancement du
+script avait démarré le chrono, puis avait été tué avant d’envoyer la fin de
+session ; l’utilisateur n’a plus touché au rameur, qui a arrêté son chrono seul ;
+le lancement suivant (`session-4`) a lu l’état 10. Hypothèse : 10 = session
+terminée automatiquement par le rameur après inactivité (différent de 3, pause
+quand on arrête de ramer, et de 4, fin demandée). Le start envoyé ensuite a
+quand même été accepté (running en 1,6 s, temps et calories repartis de 0). À
+confirmer en laissant volontairement une session inactive en notant la durée
+avant le changement d’état.
 
 **En pause**, les octets de calories, distance, puissance et temps de marche
 (30) passent à 0 ou restent périmés dans le message, alors que la console les
@@ -352,8 +364,8 @@ messages de 35 octets (`session-1`, 22:01:32 et 22:03:20) contiennent
 36 octets) contiennent des identifiants du matériel (numéro de série, version) :
 ne pas les versionner.
 
-**Non établi** : le rôle des octets 19, 20, 16, 38-39, 42 et des messages `0c`,
-la distance affichée, la valeur 10 de l’état, l’effet de chaque trame prise
+**Non établi** : le rôle des octets 16, 38-39, 42 et des messages `0c`, la confirmation du sens des drapeaux 19 et 20,
+la valeur 10 de l’état (hypothèse ci-dessous), l’effet de chaque trame prise
 isolément (par exemple si le `17` avant `0d` est nécessaire) et le comportement
 d’un arrêt depuis l’état 2 sans pause préalable.
 
