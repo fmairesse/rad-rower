@@ -1,27 +1,28 @@
 # Notes de protocole BLE
 
-Dernière mise a jour : 2026-11-08.
+Dernière mise à jour : 2026-11-14.
 
-## Etat des connaissances
+Abréviation : « QZ » = projet qdomyos-zwift (dossier `qdomyos-zwift/`, code du
+rameur dans `src/devices/proformrower/proformrower.cpp`).
 
-Une capture BTSnoop d’une session iFit sur un Google Pixel 3a (Android 12) a
-été analysée. Le fichier local est `bugreport/btsnoop_hci.log` ; il reste
-non versionné et contient des identifiants Bluetooth. Ne pas le publier tel
-quel.
+## Sources
 
-Une connexion LE a réussi sur le handle HCI `0x0001`. Les offsets ci-dessous
-sont relatifs au début de la capture : connexion réussie vers `126.6 s`,
-déconnexion vers `291.4 s` (raison HCI `0x16`). La conversion des horodatages
-absolus n’est pas validée.
-L’analyse a utilisé un script Python ponctuel pour lire BTSnoop/H4 et extraire
-les PDU ATT ; ce script n’a pas été conservé. Aucune commande n’a été envoyée
-au rameur pendant l’analyse.
+- Captures HCI BTSnoop d’iFit (Google Pixel 3a, Android 12), dans `bugreport/`,
+  non versionnées (elles contiennent des identifiants Bluetooth) :
+  `btsnoop_hci.log`, `btsnoop_hci-202611081036.log`, `btsnoop_hci-start.log`
+  (start/stop/end), `btsnoop_hci-only-connect.log` (connexion seule, ~134 s),
+  `btsnoop_hci-only-connect2.log` (7 s), `btsnoop_hci-row-nostart.log` (coups
+  de rame sans session). Décodées avec `btmon`/`tshark` par des scripts
+  ponctuels non conservés.
+- Code de QZ (source externe, branche « Sport RL »).
+- Essais Bleak sous Linux : `bleak/01-connection.py` (essais successifs,
+  historique) et `bleak/02-connection.py` (script de référence).
 
-La découverte GATT a observé les services et caractéristiques suivants.
-Pour les UUID 128 bits, la représentation canonique correspond à l’inversion
-des 16 octets de l’UUID transporté dans les PDU ATT. Cette conversion donne les
-mêmes identifiants que Bleak ; `uuid.UUID(bytes_le=...)` ne convient pas ici,
-car cette fonction ne renverse que les premiers champs de l’UUID.
+## Services GATT (capture iFit)
+
+Pour les UUID 128 bits, la représentation canonique est l’inversion des
+16 octets de l’UUID transporté dans les PDU ATT (même résultat que Bleak ;
+`uuid.UUID(bytes_le=...)` ne convient pas).
 
 | Plage de handles du service | UUID du service | Handle valeur | UUID caractéristique | Propriétés observées |
 | --- | --- | --- | --- | --- |
@@ -39,529 +40,145 @@ car cette fonction ne renverse que les premiers champs de l’UUID.
 | `0x0017-0xffff` | `00001400-555e-e99c-e511-f9f4f8daeb24` | `0x001e` | `00001403-555e-e99c-e511-f9f4f8daeb24` | Read, Write |
 | `0x0017-0xffff` | `00001400-555e-e99c-e511-f9f4f8daeb24` | `0x0020` | `00001404-555e-e99c-e511-f9f4f8daeb24` | Read, Notify |
 
-Bleak labels `00001400-555e-e99c-e511-f9f4f8daeb24` as `HDP` by resolving
-its leading 16-bit value `0x1400`. Since the remaining UUID fields do not match
-the Bluetooth Base UUID, this label alone does not establish that the service
-implements the standard Health Device Profile. The full UUID and observed
-characteristics are the reliable identifiers.
+Bleak affiche `00001400-555e-e99c-e511-f9f4f8daeb24` comme `HDP` à partir de ses
+16 premiers bits ; les autres champs ne suivent pas l’UUID de base Bluetooth,
+donc ce libellé ne prouve pas un vrai Health Device Profile. Aucun Fitness
+Machine Service (`0x1826`) n’a été observé.
 
-CCCD descriptors (`0x2902`) were observed at handles `0x000c`, `0x0014`,
-`0x001c` and `0x0021`. The client wrote `01 00` to `0x000c` before receiving
-notifications on characteristic `0x000b`.
+Le rameur n’est utilisé que par le service `00001533-…` : commandes écrites sur
+`…1534-…` (handle `0x000e`), notifications sur `…1535-…` (handle `0x000b`,
+CCCD `0x000c`, écrire `01 00`). Les autres services n’ont pas servi.
 
-During the capture, ATT traffic included 1,461 Write Requests to value handle
-`0x000e` and 1,677 notifications on value handle `0x000b`. The observed
-payloads are proprietary byte sequences, commonly 20 bytes and sometimes 4
-bytes. The short write `fe 02 18 03` (218 occurrences) appears from `3.6 s` to
-`163.1 s` after connection; `fe 02 19 03` (221) appears from `2.8 s` to
-`163.4 s`. The short writes `fe 02 0c 02` (46) and `fe 02 0d 02` (8) appear
-between about `12.6 s` and `56.5 s`. Their meanings have not been established.
-No Fitness Machine Service (`0x1826`) was observed in the discovery responses.
+## Format des messages
 
-The capture covers the user's reported start, resistance changes, rowing,
-pause/resume and stop sequence. The `fe 02 0d 02` exchange is correlated with
-several iFit state changes, but its meaning is unknown; the occurrence nearest
-the initial session start precedes the user's timestamp by about 2.2 s, so it
-does not identify a confirmed start-session command. Do not send captured or
-inferred writes to the rower.
+Observé sur toutes les écritures et notifications (captures iFit, essais
+Bleak) :
 
-## Protocole de capture horodatée
+- trame d’en-tête : `fe 02 <longueur totale> <nombre de trames, en-tête inclus>` ;
+- trames de données : `00 12 <18 octets>`, `01 12 <18 octets>`, … ;
+- dernière trame : `ff <longueur restante> <octets>`.
 
-Refaire la même séquence avec une capture HCI BTSnoop démarrée avant la
-connexion et un chronomètre indépendant. Déclencher le chronomètre au moment
-où iFit indique que le rameur est connecté ; noter ce repère comme `t=0`.
-L’indication de l’application peut survenir légèrement après l’événement HCI
-de connexion, qui sera aussi repérable dans le log.
+Exemple : `fe 02 19 03` annonce 25 octets = 18 (`00 12`) + 7 (`ff 07`). La
+longueur annoncée correspond toujours au `ff <n>` final. Les trames font
+20 octets (4 pour l’en-tête). QZ réassemble les notifications avec le même
+cadrage (et vérifie une somme de contrôle, non vérifiée ici).
 
-Garder le rameur immobile, sauf pendant les deux séries de deux coups. Utiliser
-uniquement les commandes normales d’iFit et les niveaux déjà testés. Attendre
-environ 10 secondes sans autre action entre chaque étape :
+Les trames d’un message sont écrites dans l’ordre, avec réponse ATT
+(`response=True`). Un message sans sa trame finale `ff` ne réarme pas le
+watchdog du rameur (voir ci-dessous).
 
-1. Connecter iFit et démarrer le chronomètre indépendant à `t=0`, puis
-  attendre 10 secondes.
-2. Démarrer la session ; noter le temps
-  et attendre 10 secondes.
-3. Régler la résistance à 2 ; appuyer sur `Tour/Lap`, noter le temps écoulé et attendre 10 secondes.
-4. Régler la résistance à 3 ; appuyer sur `Tour/Lap`, noter le temps écoulé  et attendre 10 secondes.
-5. Noter le début des deux coups de rame et le moment où les métriques
-   apparaissent.
-6. Mettre en pause ; noter le temps et attendre 10 secondes.
-7. Reprendre ; noter le temps et
-  attendre 10 secondes.
-8. Faire deux coups de rame, puis noter le temps à l’apparition des métriques.
-9. Arrêter la session ; noter le temps
-  et repérer le moment où le chrono du rameur s’arrête.
-10. Ne plus toucher à l’application pendant au moins 15 secondes ; laisser la
-  capture enregistrer la déconnexion éventuelle.
+## Connexion maintenue (validé le 2026-11-14)
 
-Ne pas manipuler le téléphone ou le chronomètre pendant les coups de rame. Une
-seconde personne peut appuyer sur `Tour/Lap` et noter le temps affiché ; sinon,
-noter l’intervalle juste avant et après chaque série. Fournir les temps écoulés
-depuis `t=0` et les valeurs affichées par le chrono/résistance. Extraire et
-partager seulement `btsnoop_hci.log`, pas le bugreport complet ; vérifier et
-masquer les adresses Bluetooth avant toute publication.
+**Fait observé** : `bleak/02-connection.py` maintient la connexion avec le
+rameur ; l’utilisateur a validé l’essai (durée et paramètres exacts non
+consignés). Le script n’envoie ni confirmation, ni commande de résistance, ni
+échanges `0b`, `18`, `10`, `11`.
 
-## Analyse de la capture du 8 novembre
+Séquence (même contenu et même ordre que QZ pour le Sport RL ; chaque trame a
+été comparée octet par octet au code de QZ) :
 
-Fichier : `bugreport/btsnoop_hci-202611081036.log` (483,928 octets, non
-versionné). La capture couvre `10:35:12.310` à `10:41:41.794` heure locale
-(Europe/Paris). Connexion LE réussie à `10:36:18.061` sur le handle HCI
-`0x0001`. La session iFit a été démarrée selon les notes à `10:36:33`, soit
-environ 15 secondes après la connexion. L’estimation de l’origine du chrono
-indépendant à partir des colonnes `Durée` et `Heure` varie sur environ une
-seconde ; les écarts ci-dessous sont donc approximatifs (environ ±0.5 s).
+1. activer les notifications (CCCD `0x000c`) ;
+2. initialisation, 25 écritures : `08` ×3 (`ff08…8187`, `…8098`, `…88a0`),
+   `0a` ×2 (`…8200008a`, `…8400008c`), `08` (`…959b`), `2c` (4 trames), `17`,
+   `19` ×2. Le script attend après chaque écriture un silence du rameur de
+   150 ms (max 1,5 s) ; QZ attend 400 ms fixes ;
+3. poll : messages complets (3 trames) en alternance `17` puis `19`, un message
+   toutes les 0,6 s par défaut (chaque type toutes les 1,2 s). QZ envoie le
+   même cycle, une trame toutes les 200 ms (≈ 1,2 s par cycle).
 
-Neuf Write Requests vers le handle `0x000e` contiennent le payload court
-`fe 02 0d 02`. Chacune est suivie, en moins de 300 ms, d’une autre écriture
-de 20 octets commençant par `ff 0d`. Les occurrences les plus proches des
-actions annotées sont :
+QZ fait donc lui aussi une longue initialisation (≈ 10 s) avant le poll. Elle
+n’a pas été raccourcie : le rôle de chaque échange est inconnu.
 
-| Action notée | Heure de l’écriture `fe 02 0d 02` | Ecart estimé à l’action |
+**Watchdog d’environ 10 s** : chaque fois que le client cesse d’écrire, le
+rameur coupe la liaison (raison HCI `0x13`, côté distant) 9,99 à 10,03 s après
+la dernière notification. Des messages complets réarment ce délai ; des
+messages incomplets ne le font pas.
+
+| Date | Écritures envoyées | Résultat |
 | --- | --- | --- |
-| Début session | `10:36:31.221` | environ 2.2 s avant |
-| Rame au repos | `10:37:39.156` | environ 2.7 s avant |
-| Pause iFit | `10:38:00.506` | environ 0.6 s après |
-| Reprise iFit | `10:38:11.674` | environ 0.6 s après |
-| Résistance 2 iFit | `10:38:29.663` | environ 0.5 s après |
-| Résistance 3 iFit | `10:38:39.203` | environ 0.3 s après |
-| Résistance 24 depuis le rameur | aucune dans la fenêtre proche | — |
-| Arrêt session iFit | `10:39:20.963` | environ 0.4 s après |
-| Fin session iFit | `10:39:31.734`, puis `10:39:32.663` | environ 0.4 s après la première |
+| 2026-11-08 | `08` seul, puis `08` ×2, ×3, puis `0b` | bursts de notifications attendus (3, 3, 2, puis 3 + 1 pour `0b`), coupure ~10 s après la dernière notification |
+| 2026-11-08 à 11-10 | init complète + `18`/`19` **incomplets** (sans trame `ff`), 0,37 s | coupure `0x13` avant 15 s (≈ 10 s après la fin de l’init) |
+| 2026-11-11 | init partielle + `18`/`19` **complets**, 0,37 s, 15 s | boucle terminée ; coupure 10,03 s après l’arrêt des échanges |
+| 2026-11-11 | idem, 0,75 s entre messages (chaque type toutes les 1,5 s), 60 s | liaison maintenue 60 s ; coupure 9,99 s après l’arrêt |
+| 2026-11-14 | `02-connection.py` : init QZ + `17`/`19` complets | connexion maintenue (validé par l’utilisateur) |
 
-Les deux coups de rame n’ont pas d’occurrence de ce payload à proximité ; les
-notifications continuent toutefois sur `0x000b` et leurs valeurs changent.
-Des écritures courtes `fe 02 18 03`, `fe 02 19 03` et `fe 02 0c 02` sont
-beaucoup plus fréquentes et périodiques dans la capture.
+Les ATT Write Responses prouvent la réception, pas l’acceptation applicative.
+Les `17`/`19` (QZ) comme les `18`/`19` (iFit) suffisent comme poll.
 
-Observation : le motif `fe 02 0d 02` suivi de `ff 0d ...` est fortement corrélé
-à plusieurs changements d’état demandés depuis iFit, mais sa fonction et le
-contenu des champs ne sont pas décodés. L’absence de ce motif autour du réglage
-manuel à 24 est compatible avec un changement qui n’a pas été demandé par
-iFit ; elle ne prouve pas l’absence de tout autre message lié à ce réglage.
-Ne pas rejouer ces écritures sur le rameur.
+À mesurer : cadence minimale tolérée (0,6 s par message testé ; l’écart entre
+deux messages complets doit rester < 10 s), nécessité réelle de chaque échange
+d’init, et état du voyant iFit pendant la connexion.
 
-Un événement de déconnexion HCI a lieu à `10:41:07.429`, environ 1 min 36 s
-après l’arrêt de la session iFit. La capture se termine à `10:41:41.794` ; la
-dernière ligne du CSV (`10:42:57`) est postérieure à la capture et ne peut pas
-y être corrélée.
+### Poll d’iFit (capture connexion seule)
 
-## Capture ciblée start/stop du 8 novembre
+1 175 écritures vers `0x000e` et 1 364 notifications en ~134 s. Après la
+même init, iFit envoie en boucle `19` (193 fois) et `18` (190 fois), médiane
+0,676 s par type, chaque trame longue suivant son en-tête de 0,08–0,09 s. C’est
+iFit qui termine la liaison (raison `0x16`), souvent après des minutes de poll.
+`fe 02 0c 02` (toutes les 0,86–1,1 s) apparaît aussi dans les captures avec
+session ; sens inconnu.
 
-Fichier : `bugreport/btsnoop_hci-start.log` (1,784,150 octets, non versionné).
-Le log s’étend de `14:57:44.902` à `15:47:55.293` heure locale. Il contient
-de nombreux autres événements de connexion BLE ; la session étudiée utilise
-le handle ACL `0x0010`, dont l’adresse distante correspond au rameur repéré
-par Bleak. La connexion réussit à `15:45:27.097`.
+## Rôle des échanges (hypothèses)
 
-Les quatre couples `Durée`/`Heure` fournis donnent une origine de chronomètre
-estimée autour de `15:45:25.592`, avec une dispersion de `0.277 s`. Le début
-de session est donc estimé à `15:45:53.821`.
-
-Sur le handle ACL `0x0010`, les trois actions sont associées à des écritures
-sortantes vers le handle ATT `0x000e` :
-
-| Action | Ecriture courte `fe 02 0d 02` | Ecriture suivante `ff 0d ...` | Décalage estimé |
-| --- | --- | --- | --- |
-| Start, estimé `15:45:53.821` | `15:45:53.206` | `15:45:53.296` : `ff0d020402091409020200100200330000000000` | environ `0.6 s` avant |
-| Stop, estimé `15:46:02.069` | `15:46:02.345` | `15:46:02.429` : `ff0d020402091409020200100300340000000000` | environ `0.3 s` après |
-| End, estimé `15:46:08.097` | `15:46:08.335` | `15:46:08.414` : `ff0d020402091409020200100400350000000000` | environ `0.2 s` après |
-
-Une quatrième paire apparaît à `15:46:09.272` / `15:46:09.360`, après la fin
-notée, avec le payload `ff0d020402091409020200100100320000000000`.
-
-Cette capture renforce nettement la corrélation du couple d’écritures
-`fe 02 0d 02` puis `ff 0d ...` avec start, stop et end dans iFit. Elle ne
-révèle pas encore la sémantique du couple ni celle des champs qui changent
-entre les payloads. Ne pas rejouer ces écritures sans accord explicite et
-protocole de test convenu.
-
-## Analyse hors ligne des écritures périodiques
-
-Les captures BTSnoop ont été relues avec `btmon` et les Write Requests ont été
-filtrées par connexion ACL du rameur, afin d’exclure les autres périphériques
-présents dans la capture ciblée : handle `0x0001` pour
-`btsnoop_hci-202611081036.log` et `0x0010` pour `btsnoop_hci-start.log`.
-Les intervalles ci-dessous sont des écarts entre occurrences du même payload,
-calculés à partir des horodatages btmon.
-
-| Payload court | Occurrences (capture 1 / start) | Intervalle médian (capture 1 / start) | Payload long suivant le plus fréquent |
-| --- | ---: | ---: | --- |
-| `fe021803` | 366 / 181 | 0.720 s / 0.677 s | `001202040214141402000e1c9631001040400080` |
-| `fe021903` | 369 / 183 | 0.720 s / 0.676 s | `001202040215141502000f800040000000000000` |
-| `fe020c02` | 149 / 19 | 1.124 s / 0.855 s | `ff0c020402081408020002001030000000000000` |
-
-Les écritures longues correspondantes suivent généralement leur écriture
-courte en environ 0.08–0.09 s. Les payloads longs ci-dessus sont stables dans
-la grande majorité des occurrences ; quelques variantes existent, notamment
-pour `fe021903` et `fe020c02`.
-
-Dans la capture start, les écritures `fe021803` et `fe021903` sont déjà
-présentes avant le start annoté. Elles continuent jusqu’à environ 90 s après
-la dernière paire `fe 02 0d 02` associée à la fin de session. Dans la capture
-du 8 novembre à 10:36, les dernières occurrences de `fe021803` et `fe021903`
-sont vers `353.5 s` et `353.9 s` ; le HCI Disconnect Complete arrive à
-`355.429 s` avec la raison `0x16` (connexion terminée par l’hôte local). Dans
-la capture start, les dernières occurrences sont vers `2995.5 s` ; le
-Disconnect Complete survient à `2997.427 s`, également avec la raison `0x16`.
-Ces fins de connexion iFit ne démontrent donc pas que le rameur aurait
-déconnecté un client dépourvu de ces écritures.
-
-Interprétation limitée : `fe021803` et `fe021903`, avec leurs écritures longues
-associées, sont de bons candidats à un échange périodique de polling ou de
-maintien de flux. Leur périodicité et leur présence autour de la session ne
-permettent pas de les qualifier de heartbeat ni d’établir qu’elles maintiennent
-la connexion. `fe020c02` est moins fréquent et sa cadence varie davantage.
-Les couples `fe020d02` / `ff0d...` sont associés à des changements d’état,
-pas à un rythme régulier. Ne pas rejouer ces écritures sans accord explicite.
-
-`bleak/01-connection.py` contient maintenant un test optionnel, après la séquence `08`
-/ `0b`, pour envoyer les échanges capturés `19` puis `18` en alternance. Chaque
-paire est envoyée avec `response=True`, les débuts de paire sont espacés de
-0.37 s et le test s’arrête après 15 s ou à la déconnexion. Une seconde
-confirmation `y` est requise. Cette cadence reprend la médiane observée entre
-les écritures courtes en régime établi ; le motif initial de la capture
-comporte parfois deux `19` successifs. Le test n’a pas encore été exécuté sur
-le rameur au moment de la capture iFit sans session décrite ci-dessous.
-
-`bleak/01-connection.py` now offers the captured idle continuation after `0b`, with a
-separate confirmation: `0a`, another `08`, `2c` and its three long writes,
-then the observed `19`, `17`, `19`, `18`, `11`, `11`, `19`, `10`, `19`, `10`,
-`18` sequence. Each stage waits for the notification count observed in the
-capture. Both confirmations are requested before any of these writes, so
-interactive input does not interrupt the handshake. Queued notifications are
-drained before each stage. The `2c`, `17`, `11` and `10` payload meanings are
-unknown. A static comparison confirmed all 37 writes and notification counts
-across the 14 stages; the updated sequence has not been retested on the rower.
-
-## iFit connection without a workout
-
-The user reports that `bugreport/btsnoop_hci-only-connect.log` was captured
-after opening iFit without starting a workout, while the rower's iFit light
-remained on. On the rower's ACL handle `0x0001`, the capture contains 1,175
-Write Requests to `0x000e` and 1,364 notifications on `0x000b`. The captured
-traffic runs from `28.111 s` to `161.974 s`; HCI Disconnect Complete occurs at
-`163.233 s` with reason `0x16` (the local host terminated the connection).
-
-The startup writes include three `08` exchanges, then the captured `0b` and
-`0a` exchanges, followed by another `08` exchange with
-`ff08020402040204959b00000000000000000000`, then `fe022c04` and three writes
-whose payloads begin `0012`, `0112` and `ff08`. The periodic `19`/`18` writes
-follow this setup. Their short payload counts are 193 (`19`) and 190 (`18`);
-their median per-payload intervals are `0.676 s` and `0.677 s`. Each is
-typically followed by its associated 20-byte write after about `0.08–0.09 s`.
-Neither `fe020d02` nor `fe020c02` occurs in this capture.
-
-This is direct evidence that the `18`/`19` exchanges are used by iFit while
-connected without a workout. It strengthens the polling/connection-maintenance
-hypothesis, but does not prove that these writes are what keep the BLE link or
-the rower light active. The observed `0a` and `2c` setup writes are now
-available in `bleak/01-connection.py` only behind a separate interactive confirmation;
-their semantics remain unknown.
-
-The larger file `bugreport/btsnoop_hci-only-connect.log.last` contains 13
-separate ACL connections to the proprietary service, with mixed occurrences
-of `fe020d02`; it is not a single clean connection-only trace and cannot be
-used to attribute those state writes to one user action without more timing
-context.
-
-## Bleak idle and periodic-candidate trial
-
-On 2026-11-08, the user ran the optional idle setup and periodic-candidate
-test. The `0a` exchange was followed by three notifications. The console
-reported two after the additional `08`, then discarded one queued notification
-before `2c`; comparison with the source capture shows that third notification
-belongs to the `08` exchange. The script now expects three there. The `2c`
-exchange was followed by two notifications. One notification left queued after
-the `0b` burst was also discarded before `0a`.
-
-The btmon excerpt shows successful ATT Write Responses for the periodic
-candidate writes. The short writes `fe021903` and `fe021803` are approximately
-0.37 s apart, matching the script's configured inter-exchange interval. The
-visible `18` writes are followed by notifications beginning `fe020402` and
-`ff040100`; their protocol meaning is unknown. The console reports 12
-periodic exchanges followed by `BLE connection disconnected`, so the first
-test did not complete its 15 s duration. Its btmon file was truncated before
-the disconnect event.
-
-A second test was captured in `btmon-bleak-202611082320.log`. It completed 18
-periodic exchanges (nine `19`, nine `18`) at approximately 0.37 s between
-short writes, then stopped before the configured 15 s. The last visible
-notifications arrive at `37.830086 s`; HCI Disconnect Complete occurs at
-`38.009647 s`, about 0.18 s later, with reason `0x13` (`Remote User Terminated
-Connection`). ATT Write Responses confirm that the writes were received at the
-ATT layer, but do not show semantic acceptance. The `18` exchanges were
-followed by repeated `04` notification pairs.
-
-In the connection-only iFit capture, the sequence after the `2c` response
-includes short writes in this order: `19`, `17`, `19`, `18`, `11`, `11`,
-`19`, `10`, `19`, `10`, `18`. The second Bleak test sent only `19`/`18` after
-`2c`, omitting the observed `17`, `11` and `10` exchanges. In that run, the
-last `2c`-related notifications arrived at `27.975 s`, and the remote
-disconnect occurred at `38.009647 s`, about 10.03 s later, despite the
-intervening `18`/`19` writes and notifications. This timing is compatible
-with an application-level timeout or a missing expected transition, but does
-not establish either explanation. The HCI reason only identifies the remote
-as the disconnecting side.
-
-A third test on 2026-11-08 ran the updated continuation. The console reports
-the expected notification counts for all 14 stages, including three after the
-post-`0a` `08`, and the 37 captured writes match the connection-only trace. The
-periodic test then raised `org.bluez.Error.Failed: Not connected` during a
-GATT write, before its configured 15 s duration. The supplied
-`btmon-bleak-202611082338.log` ends in the middle of an ATT Write Request at
-event #545 (`47.269 s`), before any Disconnect Complete event. The exact
-failed ATT write and HCI disconnect reason therefore remain unknown; do not
-infer them from this incomplete trace.
-
-A fourth run was captured on 2026-11-09 in
-`btmon-bleak-202611090900.log`. The idle continuation completed, then HCI
-Disconnect Complete occurred at `30.783831 s` with reason `0x13` during the
-periodic test, before its configured 15 s duration. This confirms a remote
-termination but does not identify its application-level cause.
-
-A fifth run was captured on 2026-11-10 in
-`btmon-bleak-202611102230.log`. The idle continuation again produced the
-expected notification bursts. Across the whole connection, btmon records 18
-short `19` writes and 15 short `18` writes; four `19` and two `18` belong to
-the setup. The periodic loop alone sent 14 `19` and 13 `18` writes, with a
-median interval of `0.370012 s`. Its first short write is at `82.607590 s`,
-2.8 ms after the final setup notification at `82.604791 s`; its last is `19`
-at `92.229243 s`.
-
-HCI Disconnect Complete occurs at `92.594379 s` with reason `0x13` (`Remote
-User Terminated Connection`), `9.990 s` after the final setup notification.
-The next short `18` would be due around `92.599243 s`, about 5 ms after the
-disconnect, and does not appear on HCI. The last `19` long write receives an
-ATT response. The console prints the attempted `18` write and then reports
-`BleakDBusError: [org.bluez.Error.Failed] Not connected`; the remote
-disconnect therefore precedes the BlueZ error. The console was captured with
-stderr redirected to `tee`.
-
-The 2026-11-09 and 2026-11-10 runs both end in remote reason `0x13` before
-15 s. In the 2026-11-10 run, the repeated timing is compatible with an
-approximately 10 s timeout from the final setup exchange that the periodic
-`18`/`19` traffic does not reset, but it does not prove that explanation.
-ATT responses do not establish semantic acceptance, and reason `0x13` does
-not identify the application-level cause. Do not repeat the same sequence
-without a new testable hypothesis.
-
-## Message framing (2026-11-11)
-
-A short iFit capture (`bugreport/btsnoop_hci-only-connect2.log`, about 7 s,
-host-initiated disconnect `0x16` when the user taps disconnect in iFit, no
-special write before it) was decoded with a throwaway script. Every complete
-exchange in it fits the same framing, for writes and notifications alike:
-
-- header frame: `fe 02 <total length> <number of frames incl. header>`;
-- data frames: `00 12 <18 bytes>`, `01 12 <18 bytes>`, ...;
-- last frame: `ff <remaining length> <bytes>`.
-
-Example: `fe 02 19 03` announces 25 bytes = 18 (`00 12`) + 7 (`ff 07`). The same
-holds for `18` (24 = 18 + 6), `17`, `2c` (44 = 18 + 18 + 8), `08`, `0a`, `0b`,
-`10`, `11`, `0d`, and for notifications such as `fe 02 21 03` / `fe 02 32 04`.
-The length field matches the final `ff <n>` frame in all observed messages.
-The same framing is used by an external project (qdomyos-zwift, `proformrower.cpp`)
-to reassemble rower notifications; its checksum details were not verified here.
-
-Observation: the periodic loop of `bleak/01-connection.py` used in the runs up to
-2026-11-10 sent only the header and the `00 12` frame, never the final
-`ff 06`/`ff 07` frame (the console logs list two payloads per exchange), whereas
-iFit sends all three. Those loop messages were therefore incomplete. Combined
-with the remote disconnect `0x13` about 10 s after the last complete message
-(setup), this suggests a rower-side watchdog that only complete messages reset.
-This is a hypothesis, not a result: the script now sends the three frames and
-the next run must confirm or refute it.
-
-Result of the run of 2026-11-11 21:42 (`bleak-202611112142.log`,
-`btmon-bleak-202611112142.log`): with the three frames per exchange, the
-periodic loop ran its full 15 s (41 exchanges, 20 `19`/`18` pairs alternating
-every ~0.36 s) with no remote disconnect, unlike the five earlier runs. Each
-exchange was answered by a complete notification message (`fe 02 21 03` /
-`fe 02 32 04`). After the loop stopped, the last notification arrived at
-`61.397 s` and HCI Disconnect Complete (reason `0x13`, remote) at `71.430 s`,
-10.03 s later. This matches the earlier ~10 s gaps and supports a rower-side
-watchdog of about 10 s that complete `18`/`19` messages keep resetting. Only
-one 15 s run supports this so far; a longer trial is described below.
-
-Result of the run of 2026-11-11 21:56 (`bleak-202611112156.log`,
-`btmon-bleak-202611112156.log`): the script sent 80 complete periodic
-exchanges for 60 s, alternating `19` and `18` every 0.75 s (each type every
-1.5 s). This is about half the iFit rate for each type. The second BLE
-connection in the btmon capture remained active throughout the periodic loop;
-the rower then disconnected remotely (`0x13`) at `129.155947 s`, 9.989 s after
-the last notification at `119.166560 s`. The capture also contains an earlier
-connection that disconnected at `39.199926 s`; that event is separate from
-the 60 s periodic run and should not be used to measure its result.
-
-This confirms, in one 60 s trial, that the complete `18`/`19` exchanges at
-0.75 s spacing are sufficient to avoid the ~10 s remote disconnect observed
-when writes stop. The repeated ~10 s delay after the final notification in
-both the 15 s and 60 s tests is strong evidence for an inactivity timeout
-reset by this traffic, but does not establish the rower's internal rule. The
-lower rate is now a viable test cadence; it is not yet a production guarantee.
-
-## Notifications avant le démarrage de session
-
-Dans les deux captures iFit, le client active les notifications en écrivant
-`01 00` au CCCD du handle `0x000c`, puis reçoit déjà des notifications sur le
-handle valeur `0x000b` avant l’action start notée :
-
-| Capture | Ecriture CCCD | Première notification | Notifications avant start |
-| --- | --- | --- | ---: |
-| `btsnoop_hci-202611081036.log` | `10:36:19.064` | `10:36:19.518` | 139 |
-| `btsnoop_hci-start.log` | `15:45:28.103` | `15:45:28.497` | 259 |
-
-Cela montre que la commande start n’est pas nécessaire pour recevoir au moins
-les notifications de base de `0x000b`. Cela ne permet pas de conclure que les
-métriques de rame sont émises avant start : leur décodage reste à faire.
-
-Le script `bleak/01-connection.py` appelle `BleakClient.start_notify()` sur la
-caractéristique `00001535-1412-efde-1523-785feabcd123`, ce qui configure le
-CCCD. Dans les deux captures, après la réponse à l’écriture CCCD, iFit envoie une écriture
-`fe 02 08 02` au handle `0x000e`, puis une écriture de 20 octets commençant
-par `ff 08`. La première notification suit cette séquence :
-
-| Capture | Ecriture CCCD | `fe 02 08 02` | Ecriture `ff 08 ...` | Première notification |
-| --- | --- | --- | --- | --- |
-| `btsnoop_hci-202611081036.log` | `10:36:19.064` | `10:36:19.292` | `10:36:19.436` | `10:36:19.518` |
-| `btsnoop_hci-start.log` | `15:45:28.103` | `15:45:28.334` | `15:45:28.411` | `15:45:28.497` |
-
-Cette séquence est un candidat d’initialisation du flux, et non une preuve
-qu’il faut démarrer l’entraînement pour recevoir des notifications. Le script
-envoie maintenant la première paire capturée (`fe020802` puis
-`ff08020402040204818700000000000000000000`) après `start_notify()`, et
-seulement après une confirmation `y` à l’exécution. Ces ATT Write Requests
-utilisent `response=True`. L’essai réel est consigné ci-dessous. Le sens de la
-paire reste inconnu, et les écritures `ff 08 ...` suivantes d’iFit contiennent
-des valeurs différentes qui ne sont pas toutes incluses dans le script.
-
-Essai réel du `bleak/01-connection.py` le 2026-11-08 : la connexion BLE réussit et le
-script s’abonne à `00001535-1412-efde-1523-785feabcd123`. Après confirmation,
-il envoie les deux payloads ci-dessus ; le voyant iFit du rameur s’allume et
-trois notifications arrivent, puis le voyant s’éteint. Les notifications 2
-et 3 sont identiques à des payloads vus dans les captures iFit précédentes ;
-la première partage le préfixe `fe 02 21 03` avec une notification capturée,
-mais son reste diffère. L’utilisateur rapporte que le script s’est arrêté
-après l’extinction du voyant. La capture `bugreport/btmon-bleak-202611082205.log`
-confirme une déconnexion BLE initiée par le rameur : événement HCI `Disconnect
-Complete`, statut réussi, raison `0x13` (`Remote User Terminated Connection`)
-à `19.982618` dans le temps btmon. Il survient `10.031 s` après la troisième
-notification (`9.952032`). Aucune autre écriture ATT n’est observée entre les
-trois notifications et la déconnexion.
-
-Observation : la paire déclenche au moins une réponse du rameur et un état
-indiqué par son voyant iFit. Elle ne suffit pas à maintenir cet état dans cet
-essai. L’écart d’environ 10 secondes sans écriture avant la déconnexion est
-compatible avec un délai d’inactivité ou un délai de protocole ; la raison HCI
-ne révèle pas la cause applicative.
-
-Dans les deux captures iFit, la suite immédiate après le premier burst est
-identique :
-
-| Etape | Payload court | Payload suivant |
+| En-tête | Usage observé | Sens |
 | --- | --- | --- |
-| 2e échange | `fe020802` | `ff08020402041404809800000000000000000000` |
-| 3e échange | `fe020802` | `ff0802040204140488a000000000000000000000` |
-| 4e échange | `fe020b02` | `ff0b020402070207820000008b00000000000000` |
-| 5e échange | `fe020a02` | `ff0a0204020602068400008c00000000000000` |
+| `08`, `0a`, `0b`, `2c` | initialisation, une fois | inconnu (`2c` = 44 octets) |
+| `17`, `18`, `19` | poll périodique ; la réponse est une série de notifications | `18`/`19` : métriques (voir ci-dessous) |
+| `10`, `11` | fin de l’initialisation d’iFit | inconnu |
+| `0d` | changements d’état d’iFit (start, stop, pause, reprise, résistance) | voir plus bas |
 
-Les échanges `08` sont suivis d’un burst de notifications sur `0x000b`. Ces
-payloads sont des candidats capturés chez iFit, pas des commandes décodées.
-Toutes les écritures du script utilisent `response=True`.
-Après confirmation `y`, `bleak/01-connection.py` envoie la paire initiale, attend trois
-notifications en 3 secondes, puis envoie les deuxième et troisième paires
-`08`, chacune seulement après le burst de trois notifications précédent.
-Le troisième échange produit deux notifications ; le script attend donc deux
-notifications à cette étape, puis envoie la paire `0b` si la liaison reste
-active. Il attend ensuite trois notifications pendant au plus 3 secondes.
-La paire `0a` reste exclue.
+## Notifications et métriques sans session (2026-11-12)
 
-Essai réel de cette séquence : les deux paires `08` ont chacune été suivies
-d’un burst de trois notifications. La seconde paire est envoyée à
-`14.540976` dans le temps btmon ; la dernière notification du second burst
-arrive à `14.719022`. Le rameur termine la liaison à `24.751410` avec la
-raison HCI `0x13`, soit `10.032 s` après cette notification. Aucun autre
-Write Request n’apparaît après la seconde paire et avant la déconnexion.
-Cette paire produit donc le burst attendu, mais ne suffit pas à maintenir la
-liaison. Le troisième échange `08` est maintenant implémenté dans le script,
-et a été testé : il produit deux notifications, `fe02110241e8141280020c4c471445434d4e5440`
-et `ff110104020d140d880209829083718984955c40`, et non trois. Dans les deux
-captures iFit, ces deux notifications sont suivies par la paire `0b` du
-tableau. Pendant l’essai, aucune écriture `0b` n’a été envoyée ; le rameur
-termine la liaison avec la raison HCI `0x13` environ 10 s après les deux
-notifications. Le script attend désormais deux notifications pour le
-troisième échange afin de refléter l’observation.
+Les polls produisent des notifications (messages `fe 02 21 03`, 33 octets, et
+`fe 02 32 04`, 50 octets) ; il n’y a pas de notification spontanée entre deux
+polls. Aucune session n’est nécessaire : sans rame tous les champs restent à 0,
+avec des coups de rame les mêmes messages portent des valeurs qui évoluent
+(`only-connect.log` comparé à `row-nostart.log`).
 
-Essai réel de la séquence complète avec `0b` le 2026-11-08 : les trois
-échanges `08` ont reproduit les bursts déjà observés (3, 3 et 2 notifications).
-Le script a ensuite envoyé la paire `0b` à `32.640119` dans le temps btmon ;
-les deux Write Requests ont reçu une réponse ATT. Trois notifications arrivent
-sur `0x000b` à `32.817054`, `32.817055` et `32.819308` :
-
-| Payload de notification | Temps btmon |
-| --- | ---: |
-| `fe022504020d140d880209829083718984955c40` | `32.817054` |
-| `00120104022114218202640001f9bb00005cad06` | `32.817055` |
-| `01120053002de8030024f400f401010001020000` | `32.819308` |
-| `ff015d53002de8030024f400f401010001020000` | `32.862029` |
-
-Le script rapporte les trois premières comme le burst `0b`. Une quatrième
-notification, listée ci-dessus, arrive environ 45 ms après le troisième
-élément ; aucune nouvelle écriture ATT ne la précède. Le rameur termine la
-liaison à `42.851363` avec la raison HCI `0x13` (`Remote User Terminated
-Connection`), soit environ 9.99 s après cette quatrième notification. Le
-dernier paquet ATT observé avant la déconnexion est cette notification ; aucun
-autre Write Request n’est envoyé après la paire `0b`.
-
-Observation : la paire `0b` est suivie des trois notifications attendues, mais
-ne maintient pas la connexion au-delà du délai d’environ 10 s déjà observé
-après les échanges `08`. La notification supplémentaire ne change pas cette
-conclusion. La raison HCI établit que le pair distant termine la liaison, mais
-ne révèle pas la cause applicative. La signification des payloads reste
-inconnue ; ne pas ajouter ni envoyer la paire `0a` sans nouvelle capture et
-accord explicite.
-
-## Métriques sans session démarrée (2026-11-12)
-
-Captures comparées (décodées avec `tshark`, ATT sur le handle HCI `0x0001`,
-écritures `0x000e`, notifications `0x000b`) :
-
-- `bugreport/btsnoop_hci-only-connect2.log` : connexion iFit seule, 6 s d’ATT
-  (3 réponses `18`, 6 `19`). Trop court pour servir seul de référence ; la
-  référence longue est `btsnoop_hci-only-connect.log` (130 s, 190 réponses `18`).
-- `bugreport/btsnoop_hci-row-nostart.log` : iFit connecté, quelques coups de
-  rame sans démarrer la session ; connexion à 08:23:20, 19 s d’ATT, 23
-  réponses `18`, 25 `19`. Les fichiers `*.log.last` sont des rotations plus
-  anciennes (ils recouvrent `only-connect2`) et n’ont pas servi.
-
-Observation : sans rame, tous les champs ci-dessous restent à 0 pendant les
-130 s de référence (aucun changement après le premier échange). Avec des coups
-de rame et sans session, les mêmes messages portent des valeurs qui évoluent.
-Le rameur envoie donc des données avant le démarrage de session, à condition
-que le client fasse le polling `18`/`19` ; il n’y a pas de notification
-spontanée entre deux polls.
-
-Champs qui changent (offsets 0-indexés dans chaque trame de 20 octets de la
-notification, après la trame d’en-tête `fe 02 ..`) :
+Champs qui changent (offsets 0-indexés dans la trame de 20 octets, après
+l’en-tête) :
 
 | Réponse | Trame | Octet(s) | Comportement observé |
 | --- | --- | --- | --- |
 | `18` | `00 12 ..` | 12, 14 | 0 au repos ; 0x19→0x2d→0x37→0x30 (octet 12), 0x11→0x34 croissant (octet 14) |
-| `18` | `01 12 ..` | 6 et 10 (égaux) | 0x12→0x22, +1 environ chaque seconde (compteur de temps ?) |
+| `18` | `01 12 ..` | 6 et 10 (égaux) | 0x12→0x22, +1 par seconde environ (compteur de temps ?) |
 | `18` | `01 12 ..` | 14–16 | valeur 24 bits LE croissante ; 0 au repos |
-| `18` | `ff 0e ..` | 3, 12 | octet 12 : 0→4 en 15 s (nombre de coups ?) ; octet 3 croissant 0→0x14 |
-| `19` | `ff 0f ..` | 11, 13, 16–19 | change par paliers (0xf5, 0xce, 0xba, 0xc1 à l’octet 11) |
+| `18` | `ff 0e ..` | 3, 12 | octet 12 : 0→4 en 15 s (coups ?) ; octet 3 croissant 0→0x14 |
+| `19` | `ff 0f ..` | 11, 13, 16–19 | change par paliers |
 
-Interprétations non vérifiées : les identifications entre parenthèses sont des
-hypothèses fondées sur le sens de variation uniquement. Le premier échange `18`
-de `row-nostart` montre déjà le compteur 0x12 alors que les autres champs
-valent 0 ; l’origine de ce compteur (démarré avant la connexion ?) est
-inconnue. Aucune corrélation avec les coups de rame réels n’est possible : leur
-nombre et leur instant n’ont pas été notés.
+Ces interprétations reposent seulement sur le sens de variation ; le nombre et
+l’instant des coups de rame n’ont pas été notés.
 
-Prochaine expérience : refaire la capture en notant le nombre exact de coups
-et leur instant, puis rapprocher ces valeurs des octets 12 et 14 de la trame
-`00 12` et de l’octet 12 de la trame `ff 0e`.
+**Information externe (QZ, non vérifiée sur notre rameur)** : pour le Sport RL,
+QZ lit dans une trame `00 12 01 04 02 (2e|30|31) …` la puissance (octets 12–13,
+LE), la résistance (octet 11, via une table de conversion) et la distance
+(octets 14–15 ÷ 1000), et dans une trame `ff 11 …` la cadence (octet 12) et la
+vitesse (`60 / (octets 14:13) × 30`). Pour le 750R, QZ décode des messages de
+50 octets (coups aux octets 46–47, cadence 48) et de 33 octets (allure aux
+octets 27–28).
+
+Prochaine expérience : enregistrer les notifications de `02-connection.py` en
+notant le nombre et l’instant exacts des coups, puis comparer aux champs
+ci-dessus et aux formules de QZ.
+
+## Écritures d’état `fe 02 0d 02` (non rejouées)
+
+Les captures iFit `…202611081036.log` et `…start.log` associent le couple
+`fe 02 0d 02` puis une écriture de 20 octets `ff 0d …` (moins de 300 ms plus
+tard) aux actions start, stop, end, pause, reprise et résistance 2 et 3 (0,3 à
+0,6 s après l’action ; une occurrence 2,2 s avant le start). Aucune occurrence
+pour un réglage manuel à 24 sur le rameur ni pour les coups de rame.
+
+Payloads de la capture `start` : start
+`ff0d020402091409020200100200330000000000`, stop `…100300340000000000`, end
+`…100400350000000000`, puis `…100100320000000000` après la fin. Le dernier
+octet non nul semble être une somme de contrôle (hypothèse).
+
+**Information externe (QZ)** : pour régler la résistance 1–24, QZ envoie
+`fe 02 0d 02` puis un `ff 0d 02 04 02 09 14 09 02 01 04 …` dont quelques octets
+varient selon le niveau (niveau 1 : `76 01 00 9b`, niveau 24 : `e6 26 00 30`).
+Ce format diffère de celui d’iFit ci-dessus. Ne jamais envoyer ces écritures
+sans accord explicite et protocole d’essai convenu.
 
 ## Règles de consignation
 
@@ -575,8 +192,6 @@ et leur instant, puis rapprocher ces valeurs des octets 12 et 14 de la trame
   du rameur ; documenter alors les précautions prises.
 
 ## Modèle d’observation
-
-Utiliser ce modèle pour chaque experience significative :
 
 ```markdown
 ### Date - Nom de l’expérience

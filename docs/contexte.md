@@ -1,100 +1,57 @@
 # Contexte du projet
 
-Dernière mise a jour : 2026-11-11.
+Dernière mise à jour : 2026-11-14.
 
 ## Objectif
 
-Créer une application Android pour piloter un rameur d’interieur Proform
-Sport RL via Bluetooth LE.
+Créer une application Android pour piloter un rameur d’intérieur ProForm
+Sport RL via Bluetooth LE. On explore d’abord le protocole sous Linux avec
+Python et Bleak (`bleak/`), avant de l’utiliser dans `android/`.
 
-## Etape actuelle
+## Étape actuelle
 
-La capture iFit sans entraînement confirme l’émission des échanges `18`/`19`
-en mode connecté : 190/193 occurrences, avec des intervalles médians de
-0,677/0,676 s. Un essai Bleak avec les trois trames complètes par échange a
-maintenu la connexion pendant 60 s à une cadence réduite (un échange toutes
-les 0,75 s, soit chaque type toutes les 1,5 s). Le rameur a ensuite coupé la
-liaison 9,99 s après la dernière notification. Cela confirme qu’au moins cette
-cadence suffit pendant l’essai ; le délai d’environ 10 s après l’arrêt des
-échanges est également confirmé. Voir les détails et les limites dans les
-notes de protocole BLE.
+`bleak/02-connection.py` maintient la connexion avec le rameur (validé par
+l’utilisateur le 2026-11-14) : initialisation de 25 écritures puis poll
+alternant des messages complets `17`/`19`, sans confirmation ni commande de
+résistance. Les trames viennent de QZ (qdomyos-zwift, branche Sport RL) et ont
+été comparées octet par octet. Sans messages complets, le rameur coupe la
+liaison environ 10 s après le dernier. Détails, historique des essais et
+limites : [notes de protocole BLE](protocole-ble.md).
 
-## Acquis verifies
+## Acquis vérifiés
 
-- Capture iFit du 2026-11-12 (`btsnoop_hci-row-nostart.log`) : sans session
-  démarrée, les réponses aux polls `18`/`19` contiennent déjà des valeurs qui
-  évoluent avec les coups de rame (alors qu’elles restent à 0 sans rame). Le
-  décodage des champs reste à faire ; voir « Métriques sans session démarrée »
-  dans les notes de protocole.
+- Environnement : adaptateur Bluetooth et `bluetoothctl` 5.72 disponibles ;
+  Bleak fonctionne (`poetry` dans `bleak/`) ; le rameur s’annonce `I_RW`.
+- Services GATT, UUID, cadrage des messages (`fe 02 …` / `00 12` / `ff …`) et
+  poll d’iFit : voir les notes de protocole.
+- Sans session démarrée, les notifications des polls portent déjà des valeurs
+  qui évoluent avec les coups de rame ; le décodage reste à faire.
 
-- Le workspace contient les dossiers `android/` et `bleak/`.
-- L’utilisateur indique débuter en BLE et souhaite progresser dans son
-  utilisation de l’IA.
-- Une documentation de contexte a été initialisée pour être versionnée avec
-  le projet.
-- La CLI BlueZ `bluetoothctl` est disponible dans `/usr/bin/bluetoothctl`.
-  Vérification du 2026-11-01 : `command -v bluetoothctl` et
-  `bluetoothctl --version` (version 5.72). Aucun scan ni connexion sous Linux
-  n’a encore été effectué.
-- Une capture `bugreport/btsnoop_hci.log` d’une session iFit a été fournie
-  depuis un Google Pixel 3a sous Android 12. Elle contient une connexion BLE
-  réussie et des échanges ATT/GATT ; voir les observations dans
-  [les notes de protocole BLE](protocole-ble.md).
-- Une deuxième capture horodatée, `bugreport/btsnoop_hci-202611081036.log`,
-  a été rapprochée des actions iFit. Une écriture candidate se corrèle à la
-  pause, la reprise, aux résistances 2/3 et à l’arrêt ; son sens reste à
-  vérifier dans les notes de protocole.
-- Une capture ciblée `bugreport/btsnoop_hci-start.log` associe plus
-  précisément le même couple d’écritures aux actions start/stop/end d’iFit.
-  Les payloads sont candidats seulement ; leur sémantique n’est pas décodée.
-- `bleak/01-connection.py` s’abonne maintenant aux notifications de la caractéristique
-  `00001535-1412-efde-1523-785feabcd123` et affiche leur heure locale et les
-  octets bruts en hexadécimal. Après confirmation `y`, il envoie les paires
-  d’initialisation `08`, puis la paire `0b` seulement si les deux notifications
-  du troisième échange `08` arrivent et que la liaison reste active. Lors de
-  l’essai du 2026-11-08, la paire `0b` a déclenché trois notifications, puis
-  une quatrième environ 45 ms plus tard. Le rameur a néanmoins coupé la
-  liaison (raison HCI `0x13`) environ 10 s après cette dernière notification.
-  Le script propose une continuation idle optionnelle jusqu’aux échanges
-  `17`/`11`/`10`, avec une confirmation distincte avant l’envoi. Le test du
-  23:38 a confirmé les 37 écritures et les bursts des 14 étapes, mais son
-  btmon était tronqué. Les tests de 09:00 et 22:30 ont tous deux obtenu un
-  disconnect distant (`0x13`) avant 15 s. Le 22:30 a transmis 14 `19` et 13
-  `18` dans la boucle seule, puis le rameur a coupé la liaison ~5 ms avant le
-  prochain `18`, 9,99 s après le dernier burst du setup.
-- La capture montre des écritures répétées vers la caractéristique `0x000e`
-  et des notifications sur `0x000b`. La signification des payloads et leur
-  correspondance avec les actions de la session restent inconnues.
+## Hypothèses et inconnues
 
-## Hypotheses et inconnues
-
-- Les services et caractéristiques observés sont consignés dans les notes de
-  protocole ; le sens des commandes et le format des métriques restent
-  inconnus. Ne pas déduire une commande de pilotage de la seule forme des
-  payloads.
-- La disponibilité de l’adaptateur Bluetooth, le fonctionnement du service
-  BlueZ, ainsi que la disponibilité de Python et de Bleak restent à vérifier.
-- Les besoins d’appairage et les possibilités réelles de pilotage restent à
-  déterminer expérimentalement.
+- Le sens des échanges d’init (`08`, `0a`, `2c`, `17`) et des champs des
+  notifications est inconnu ; les formules de QZ pour le Sport RL ne sont pas
+  vérifiées sur notre rameur.
+- Les écritures `fe 02 0d 02` / `ff 0d …` sont corrélées aux changements
+  d’état d’iFit (start, stop, résistance) mais n’ont jamais été envoyées.
+- Cadence minimale de poll tolérée, utilité de chaque échange d’init et état
+  du voyant iFit pendant la connexion : à vérifier.
 
 ## Blocages
 
-Aucun blocage constaté à ce stade ; l’environnement BLE reste à vérifier.
+Aucun.
 
 ## Prochaine étape
 
-Résultats des essais du 2026-11-11 : les échanges périodiques complets `19`/`18`
-ont maintenu la liaison pendant 15 s à 0,37 s, puis 60 s à 0,75 s entre
-échanges. Dans les deux essais, le rameur a envoyé les notifications attendues
-et a coupé la liaison (`0x13`) environ 10 s après le dernier échange. La
-prochaine étape est d’examiner si les notifications fournissent des métriques
-utiles et de vérifier si le voyant iFit reste actif pendant la boucle. Ne pas
-envoyer de commandes de pilotage ou changer la résistance sans accord explicite.
-Voir les notes de protocole (« Message framing »).
+Enregistrer les notifications de `02-connection.py` pendant des coups de rame
+dont le nombre et l’instant sont notés, puis les comparer aux champs observés
+et aux formules de QZ pour décoder cadence, puissance, distance et résistance.
+Ne pas envoyer de commande modifiant le rameur (résistance, start/stop) sans
+accord explicite.
 
 ## Documents associés
 
 - [Guide de scan avec bluetoothctl](../bluetoothctl/README.md) : procédure
   documentée en anglais, pas encore testée avec le rameur.
 - [Notes de protocole BLE](protocole-ble.md)
-- [Decisions du projet](decisions.md)
+- [Décisions du projet](decisions.md)

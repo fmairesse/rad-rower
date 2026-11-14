@@ -26,3 +26,15 @@ conversation. Si un choix change, indiquer quelle décision le remplace.
   et relire les modifications avant de les versionner.
 - Limite : les documents chargés consomment aussi des tokens ; cette
   organisation ne garantit pas une réduction de leur consommation.
+
+## D003 - Prendre QZ comme référence pour l’init et le poll
+
+- Date : 2026-11-14.
+- Statut : adoptée.
+- Décision : `bleak/02-connection.py` reprend l’initialisation et le poll de
+  QZ (qdomyos-zwift, branche Sport RL) plutôt que les rejeux de captures iFit
+  de `bleak/01-connection.py`, conservé comme historique.
+- Raison : séquence plus courte, éprouvée par un projet existant, et
+  confirmée par un essai sur notre rameur (connexion maintenue).
+- Conséquence : toute trame ajoutée doit être comparée à QZ ou à une capture ;
+  aucune commande de pilotage sans accord explicite.
