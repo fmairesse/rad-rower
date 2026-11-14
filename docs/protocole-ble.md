@@ -300,9 +300,62 @@ autres états. Le retour au repos remet le compteur à 0. Octets 19 et 20
 pendant la session 19 = 0 et 20 = 1 ; en repos après une session 19 = 20 = 0.
 Rôle exact inconnu.
 
-**Non établi** : le rôle des octets 19 et 20 et des messages `0c`, l’effet de
-chaque trame prise isolément (par exemple si le `17` avant `0d` est nécessaire)
-et le comportement d’un arrêt depuis l’état 2 sans pause préalable.
+### Décodage des champs restants (2026-11-14, `06-read-session.py`, poll `17`/`19`)
+
+Sources (non versionnées, `bugreport/`) : `session-1.log` (60 s, 17 coups ; notes
+de l’utilisateur : 4 cals à 22:02:00, 7 cals et 600 cals/hr à la fin),
+`session-2.log` (cals relevées à 7 MARK, toutes les 15 s), `session-3.log`
+(cals/hr, 7 MARK), `session-4.log` (temps et distance, 5 MARK à 20 s). Le script
+joue un bip à chaque MARK et l’utilisateur note la valeur de la console. Les
+relevés ont un décalage de lecture d’environ ±1 s par rapport aux messages.
+
+Offsets du corps du message de 50 octets (`01 04 02 2e …`) :
+
+| Offset | Contenu | Validation |
+| --- | --- | --- |
+| 21 (copies en 26 et 30) | temps écoulé en s, hors pauses ; 30 passe à 0 en pause | **validé** : console 22, 42, 56, 70, 90 s pour 21-22, 40-41, 54-56, 69-70, 88-89 |
+| 34-37 (u32 LE) | calories : valeur / 100 000 = kcal ; nulle en pause | **validé** : les 5 relevés de `session-2` hors pause (console 2, 6, 9, 11, 15 pour 1,8-2,0 ; 5,1-5,5 ; 8,9-9,1 ; 11,1-11,6 ; 14,4-14,6) sont reproduits à ±1 près (arrondi et décalage de lecture), les 2 autres tombent en pause ; l’intégrale de cals/hr sur le temps de marche égale à la valeur dans `session-3` (rapport 1,00) |
+| 10-11 (puissance) | cals/hr de la console = **3,2438 × watts + 174,66** | **validé** : 6 relevés de `session-3` (765, 820, 1378, 1326, 1229, 1106) reproduits à ±0,4 près, avec la puissance de l’octet 10 ; non calculé quand la puissance est 0 (console non relevée) |
+| 8-9 | niveau de résistance × 416 (1248, 2496, 4992 pour 3, 6, 12) ; cohérent avec l’octet 9 de la table de QZ | cohérent avec le décodage existant, relevés de niveau non faits |
+| 40 | puissance moyenne en W, sur le temps de marche | **fortement probable** : égale à la moyenne temporelle des octets 10 à ±3 W sur les sessions 2, 3 et 4 |
+| 45 | durée cumulée des pauses en s (le rameur se met en pause seul quand on arrête de ramer) | **probable** : 12 puis 24 s et 6 puis 12 s, pauses relevées dans les logs 2 et 4 |
+| 25 | état : 1, 2, 3, 4 comme avant ; vu **10** (0x0a) avant le start de `session-4` (juste au branchement, restes de la session précédente dans les autres octets) | 10 : inconnu |
+| 16, 38-39, 42 | constants (`46`, `2c 01`, `b4`) | inconnu |
+
+`ff 11`, octets 15-16 (u16 LE) : allure moyenne en s/500 m, **fortement probable**.
+Elle reste figée en pause alors que l’allure instantanée tombe à 0 et vaut
+500 × temps / distance de l’octet 12 à quelques secondes près (113 contre 113,
+144 contre 142 dans `session-4`).
+
+**Distance : décodage confirmé.** Octets 12-13 (u16 LE), en mètres. Comparaison en
+direct avec la console le 2026-11-14 (`07-distance.py`, valeurs « cohérentes » selon
+l’utilisateur ; paires de valeurs non consignées). Les relevés de `session-4`
+(console 60, 125, 139, 154, 200 m pour environ 100, 195, 214, 248, 325 dans le
+message) sont à environ 0,62 × le message, soit 1 / 1,609 (facteur km → miles).
+Confirmé par l’utilisateur : la console était alors en miles (unités
+impériales). L’explication d’un relevé décalé ne tient pas (une lecture tardive
+donnerait une valeur plus grande, pas plus petite).
+
+**En pause**, les octets de calories, distance, puissance et temps de marche
+(30) passent à 0 ou restent périmés dans le message, alors que la console les
+garde : seuls le temps (21, 26), la puissance moyenne (40), la durée de pause
+(45) et l’allure moyenne restent lisibles. Il faut donc intégrer les valeurs
+pendant la marche pour retrouver les calories ou la distance après une pause.
+
+**Autres observations** : le rameur passe seul en pause (état 3) quelques
+secondes après l’arrêt des coups et revient seul en marche (2) quand on rame
+de nouveau, même après notre pause ; il démarre aussi seul une session quand
+on rame. Le message de 35 octets (`01 04 02 1f`) recopie le même `ff 11`. Deux
+messages de 35 octets (`session-1`, 22:01:32 et 22:03:20) contiennent
+`72 00 … 0d 00 aa 00` et `72 00 … 3e 00 6e 00` (le premier champ vaut le temps
+écoulé), rôle inconnu. Les messages de l’init (33, 22, 17, 37, 32, 28, 10, 9 et
+36 octets) contiennent des identifiants du matériel (numéro de série, version) :
+ne pas les versionner.
+
+**Non établi** : le rôle des octets 19, 20, 16, 38-39, 42 et des messages `0c`,
+la distance affichée, la valeur 10 de l’état, l’effet de chaque trame prise
+isolément (par exemple si le `17` avant `0d` est nécessaire) et le comportement
+d’un arrêt depuis l’état 2 sans pause préalable.
 
 ## Écritures d’état `fe 02 0d 02` (captures)
 

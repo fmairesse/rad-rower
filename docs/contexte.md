@@ -79,13 +79,14 @@ Aucun.
 
 ## Prochaine étape
 
-Intégrer l’état du rameur et les commandes start/pause/reprise/arrêt dans
-`web/` ou directement dans l’application Android (le cycle Bleak est validé).
-Tester `web/` sur le vrai rameur dans un navigateur
-compatible : stabilité, comparaison des sept métriques avec la console,
-déconnexion et reconnexion. Puis décoder les champs restants en les comparant
-à l’affichage du rameur (temps, calories…) et préparer la lecture dans
-l’application Android.
+Distance : décodage confirmé en direct (`07-distance.py`) ; l’écart de 1,6 des relevés de
+`session-4` correspond à 1,609 (km → miles) : console en miles à ce moment (confirmé). Les autres
+champs sont décodés (voir les notes de protocole) ; `03-telemetry.py` les affiche
+et reste à vérifier en direct sur le rameur (temps, calories, cals/hr calculées,
+puissance moyenne, durée de pause, allure moyenne). Restent inconnus : octets 16,
+19, 20, 38-39, 42, état 10, messages `0c`. Ensuite, chercher à simplifier l’init
+et les messages par essais, puis intégrer dans `web/` ou l’application Android
+(et tester `web/` sur le vrai rameur).
 Ne pas envoyer de commande modifiant le rameur
 (résistance, start/stop) sans accord explicite.
 
