@@ -1,0 +1,71 @@
+:root {
+  color-scheme: light;
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  color: #102923;
+  background: #f3f5ef;
+  font-synthesis: none;
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+[v-cloak] { display: none; }
+#startup, noscript { display: block; padding: 2rem; }
+main { max-width: 1160px; margin: auto; padding: 32px 32px 0; }
+header, footer, .connection, .actions { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+header { padding-bottom: 24px; border-bottom: 1px solid #d5ddd3; }
+.brand { color: inherit; text-decoration: none; font-weight: 700; font-size: 24px; letter-spacing: -.05em; }
+.brand span { display: block; font-size: 10px; letter-spacing: .19em; margin-top: 5px; font-weight: 500; }
+.badge { font-size: 13px; padding: 9px 14px; border: 1px solid #c8d1c6; border-radius: 30px; white-space: nowrap; }
+.badge span { color: #727d73; margin-right: 5px; }
+.badge.live { background: #dcf5ce; border-color: #b7dba4; }
+.badge.live span { color: #2e6a31; }
+.intro { padding: 56px 0 32px; }
+.eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .18em; }
+h1, .reading { font-family: "Trebuchet MS", sans-serif; }
+h1 { font-size: clamp(48px, 7vw, 80px); font-weight: 500; line-height: 1.02; letter-spacing: -.065em; margin: 18px 0; }
+h1 em { font-style: normal; color: #4a7455; }
+.subtitle, .connection p, .help p { color: #4c6155; line-height: 1.65; }
+.subtitle { margin: 22px 0 0; }
+.connection { padding: 23px 26px; border-radius: 16px; background: #e3e9dd; }
+h2 { font-size: 15px; margin: 0; font-weight: 600; }
+.connection p { font-size: 13px; margin: 7px 0 0; }
+.actions { gap: 10px; flex-wrap: wrap; }
+button { border: 1px solid #173b2f; border-radius: 9px; background: #173b2f; color: #fff; padding: 13px 19px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+button:hover:enabled { background: #2b5542; }
+button:disabled { opacity: .5; cursor: not-allowed; }
+button.secondary { background: transparent; color: #173b2f; }
+button.secondary:hover { color: white; }
+:focus-visible { outline: 3px solid #688438; outline-offset: 4px; }
+.notice { border-left: 3px solid #9a6b0d; padding: 14px 18px; background: #faf0d9; font-size: 14px; line-height: 1.5; border-radius: 5px; }
+.notice.error { border-color: #a63d30; background: #fce8e2; color: #822e24; }
+.freshness { color: #56685b; font-size: 12px; margin: 24px 0 14px; min-height: 18px; }
+.metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.metric { min-height: 166px; padding: 23px; border-radius: 15px; background: #fff; border: 1px solid #dce3d6; }
+.metric.primary { grid-column: span 2; background: #102f26; color: #e7f2e4; border-color: #102f26; }
+.metric h2 { font-size: 13px; font-weight: 500; }
+.reading { margin: 24px 0 17px; font-size: clamp(32px, 4vw, 44px); font-weight: 500; line-height: 1; letter-spacing: -.045em; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.reading span { font: 400 12px "Segoe UI", sans-serif; letter-spacing: 0; white-space: nowrap; }
+.metric.primary .reading { color: #d3f596; font-size: 58px; }
+.metric-note { color: #5a6c5e; font-size: 11px; margin: 0; line-height: 1.5; }
+.metric.primary .metric-note { color: #bac9b9; }
+.metric.stale .reading { opacity: .5; }
+.help { max-width: 800px; padding: 36px 0 20px; }
+.help p { font-size: 13px; }
+details { padding: 20px 0; border-top: 1px solid #d5ddd3; font-size: 12px; color: #4c6155; }
+summary { cursor: pointer; font-weight: 600; }
+.log { max-height: 230px; overflow: auto; padding-left: 25px; line-height: 1.9; }
+.log time { font-variant-numeric: tabular-nums; margin-right: 8px; }
+footer { padding: 24px 0; border-top: 1px solid #d5ddd3; font-size: 11px; font-weight: 600; letter-spacing: .05em; }
+footer span { font-weight: 400; letter-spacing: 0; color: #4c6155; }
+@media (max-width: 800px) {
+  .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .connection { align-items: flex-start; flex-direction: column; }
+}
+@media (max-width: 480px) {
+  main { padding: 22px 16px 0; }
+  .intro { padding-top: 35px; }
+  .metric { padding: 18px; min-height: 155px; }
+  .reading { font-size: 32px; }
+  .reading span { display: block; margin-top: 9px; }
+  .metric.primary .reading span { display: inline; }
+  footer { align-items: flex-start; flex-direction: column; gap: 8px; }
+}

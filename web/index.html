@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#102923">
+  <title>Radrower · Métriques en direct</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/vue@3.5.13/dist/vue.global.prod.js"></script>
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <div id="startup" role="alert">
+    Chargement de Vue.js… Si ce message persiste, vérifiez l’accès au CDN et rechargez la page.
+  </div>
+  <noscript>Activez JavaScript pour utiliser Radrower.</noscript>
+  <main id="app" v-cloak>
+    <header>
+      <a class="brand" href="./">RADROWER<span>SPORT RL / LIVE</span></a>
+      <span class="badge" :class="{ live: state === 'streaming' }">
+        <span aria-hidden="true">●</span> {{ stateLabel }}
+      </span>
+    </header>
+
+    <section class="intro">
+      <p class="eyebrow">PROFORM SPORT RL</p>
+      <h1>Chaque coup<br><em>compte.</em></h1>
+      <p class="subtitle">Les métriques du rameur, en direct dans votre navigateur.</p>
+    </section>
+
+    <section class="connection" aria-label="Connexion Bluetooth">
+      <div>
+        <h2>Votre rameur</h2>
+        <p>{{ connectionHint }}</p>
+      </div>
+      <div class="actions">
+        <button :disabled="!supported || busy || state !== 'disconnected'" @click="connect">
+          {{ busy ? 'Connexion en cours…' : 'Connecter le rameur' }}
+        </button>
+        <button v-if="state !== 'disconnected'" class="secondary" @click="disconnect">
+          Déconnecter
+        </button>
+      </div>
+    </section>
+
+    <p v-if="!supported" class="notice error" role="alert">
+      {{ supportError }}
+    </p>
+    <p v-if="error" class="notice error" role="alert">{{ error }}</p>
+    <p v-if="warning" class="notice" role="status">{{ warning }}</p>
+    <p v-if="hidden && state !== 'disconnected'" class="notice" role="status">
+      Gardez cet onglet visible et l’écran allumé : la mise en veille peut interrompre les échanges.
+    </p>
+    <p class="freshness" role="status">{{ freshnessLabel }}</p>
+
+    <section class="metrics" aria-label="Métriques du rameur">
+      <article v-for="card in cards" :key="card.key" class="metric"
+               :class="{ primary: card.key === 'watts', stale: card.stale }">
+        <h2>{{ card.label }}</h2>
+        <p class="reading">{{ card.value }} <span>{{ card.unit }}</span></p>
+        <p class="metric-note">{{ card.note }}</p>
+      </article>
+    </section>
+
+    <section class="help">
+      <h2>Une connexion, rien de plus.</h2>
+      <p>Allumez le rameur, fermez iFit et les scripts Bleak, puis sélectionnez
+        <strong>I_RW</strong> dans la fenêtre Bluetooth. L’initialisation prend quelques secondes.</p>
+      <p>Cette page lit les métriques par interrogation périodique. Elle ne modifie pas
+        la résistance et ne démarre ni n’arrête de séance. La résistance reste inconnue
+        tant que le rameur ne l’a pas transmise.</p>
+      <p>Utilisez Chrome ou Edge compatible Web Bluetooth, sur HTTPS ou localhost.
+        Sur Linux, la disponibilité dépend du navigateur et de sa configuration.
+        Gardez cet onglet au premier plan.</p>
+    </section>
+
+    <details>
+      <summary>Journal de connexion</summary>
+      <p>Conservé uniquement en mémoire dans cet onglet. Aucun identifiant Bluetooth enregistré.</p>
+      <ol class="log">
+        <li v-for="(entry, index) in journal" :key="index">
+          <time>{{ entry.time }}</time> {{ entry.text }}
+        </li>
+      </ol>
+    </details>
+    <footer>RADROWER <span>Bluetooth LE · Vue.js · Sans serveur applicatif</span></footer>
+  </main>
+</body>
+</html>

@@ -19,6 +19,10 @@ rameur dans `src/devices/proformrower/proformrower.cpp`).
   historique) et `bleak/02-connection.py` (script de référence ; le code
   partagé de connexion, d’init et de poll est dans `bleak/rower.py`) et
   `bleak/03-telemetry.py` (lecture des métriques).
+- Portage Web Bluetooth : `web/protocol.js` (trames et décodage),
+  `web/rower.js` (connexion et poll). Tests sans matériel dans
+  `web/protocol.test.js` et `web/rower.test.js` ; toutes les trames écrites
+  sont comparées à `bleak/rower.py`. **Pas encore validé sur le vrai rameur.**
 
 ## Services GATT (capture iFit)
 
@@ -174,6 +178,14 @@ cadence (12), allure en s/500 m (13–14), deux octets non décodés (15, 16 : v
 `bd 00`, `be 00`, `07 01`, `09 01`), un octet à 0 (17), une somme de contrôle (18 :
 somme des octets 10 à 17 plus 0x2f, modulo 256 ; vérifiée sur 4 trames) et un
 octet à `ff` (19).
+
+Le tableau de bord `web/` reprend ces offsets et la table de résistance du
+script Python. Il rejette avec avertissement les messages réassemblés dont
+la somme de contrôle est incorrecte (le script Python les affiche avec
+`checksum=BAD`). La formule provisoire de somme de contrôle de `ff 11`
+n’est pas imposée : même reconnaissance que dans le script Python. Les tests
+GATT et les essais d’interface utilisent des notifications synthétiques ;
+ils ne constituent pas une nouvelle validation matérielle du protocole.
 
 Autres champs du message de 50 octets, non décodés : trois compteurs égaux (corps
 20, 25, 29–30) qui augmentent d’environ 1 par seconde (temps ?), une valeur

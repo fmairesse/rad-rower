@@ -24,6 +24,15 @@ le 2026-11-14 après un essai réel : puissance (W), distance (m), résistance
 (`unset` tant qu’elle n’a pas été changée sur le rameur), cadence
 (coups/min), nombre de coups, allure (s/500 m) et vitesse (trame `ff 11`).
 
+`web/` propose maintenant un tableau de bord Vue 3 (CDN, sans projet Node.js)
+avec Web Bluetooth : même init et poll, sept métriques, déconnexion manuelle
+et signalement des valeurs non actualisées. Les 11 tests JavaScript passent
+(dont comparaison de toutes les écritures à `bleak/rower.py` et GATT simulé).
+L’affichage a été vérifié dans un navigateur avec des notifications simulées,
+y compris l’absence de Web Bluetooth, l’échec du CDN et les valeurs périmées.
+**La connexion web au vrai rameur n’a pas encore été testée.**
+Conditions de lancement et limites : [guide web](../web/README.md).
+
 ## Acquis vérifiés
 
 - Environnement : adaptateur Bluetooth et `bluetoothctl` 5.72 disponibles ;
@@ -50,9 +59,11 @@ Aucun.
 
 ## Prochaine étape
 
-Décoder les champs restants (voir ci-dessus) en les comparant à l’affichage du
-rameur (temps, calories…), puis préparer la lecture de ces métriques dans
-l’application Android. Ne pas envoyer de commande modifiant le rameur
+Tester `web/` sur le vrai rameur dans un navigateur compatible : stabilité,
+comparaison des sept métriques avec la console, déconnexion et reconnexion.
+Ensuite, décoder les champs restants en les comparant à l’affichage du rameur
+(temps, calories…), puis préparer la lecture dans l’application Android.
+Ne pas envoyer de commande modifiant le rameur
 (résistance, start/stop) sans accord explicite.
 
 ## Documents associés
@@ -61,3 +72,4 @@ l’application Android. Ne pas envoyer de commande modifiant le rameur
   documentée en anglais, pas encore testée avec le rameur.
 - [Notes de protocole BLE](protocole-ble.md)
 - [Décisions du projet](decisions.md)
+- [Tableau de bord Web Bluetooth](../web/README.md)
