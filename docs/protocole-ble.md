@@ -16,7 +16,8 @@ rameur dans `src/devices/proformrower/proformrower.cpp`).
   ponctuels non conservés.
 - Code de QZ (source externe, branche « Sport RL »).
 - Essais Bleak sous Linux : `bleak/01-connection.py` (essais successifs,
-  historique) et `bleak/02-connection.py` (script de référence).
+  historique) et `bleak/02-connection.py` (script de référence ; le code
+  partagé de connexion, d’init et de poll est dans `bleak/rower.py`).
 
 ## Services GATT (capture iFit)
 
