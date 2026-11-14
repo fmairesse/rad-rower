@@ -61,7 +61,7 @@ def decode_message(body):
             "distance_m": u16(body, 12),
         }
         if body[3] == 0x2E:
-            values["time_s"] = body[21]
+            values["time_s"] = u16(body, 21)
             values["calories"] = round(u32(body, 34) / CALORIES_SCALE, 2)
             values["avg_watts"] = body[40]
             values["paused_s"] = body[45]

@@ -311,7 +311,7 @@ Offsets du corps du message de 50 octets (`01 04 02 2e …`) :
 
 | Offset | Contenu | Validation |
 | --- | --- | --- |
-| 21 (copies en 26 et 30) | temps écoulé en s, hors pauses ; 30 passe à 0 en pause | **validé** : console 22, 42, 56, 70, 90 s pour 21-22, 40-41, 54-56, 69-70, 88-89 |
+| 21-22 (u16 LE ; copies en 26-27 et 30-31) | temps écoulé en s, hors pauses ; 30-31 passe à 0 en pause. Sur 16 bits : la capture iFit (poll `18`/`19`, mêmes compteurs décalés d’un octet) atteint 3 157 s, et le message de l’état 10 contient 298 s en 30-31 | **validé** : console 22, 42, 56, 70, 90 s pour 21-22, 40-41, 54-56, 69-70, 88-89 |
 | 34-37 (u32 LE) | calories : valeur / 100 000 = kcal ; nulle en pause | **validé** : les 5 relevés de `session-2` hors pause (console 2, 6, 9, 11, 15 pour 1,8-2,0 ; 5,1-5,5 ; 8,9-9,1 ; 11,1-11,6 ; 14,4-14,6) sont reproduits à ±1 près (arrondi et décalage de lecture), les 2 autres tombent en pause ; l’intégrale de cals/hr sur le temps de marche égale à la valeur dans `session-3` (rapport 1,00) |
 | 10-11 (puissance) | cals/hr de la console = **3,2438 × watts + 174,66** | **validé** : 6 relevés de `session-3` (765, 820, 1378, 1326, 1229, 1106) reproduits à ±0,4 près, avec la puissance de l’octet 10 ; non calculé quand la puissance est 0 (console non relevée) |
 | 8-9 | niveau de résistance × 416 (1248, 2496, 4992 pour 3, 6, 12) ; cohérent avec l’octet 9 de la table de QZ | cohérent avec le décodage existant, relevés de niveau non faits |
@@ -321,8 +321,7 @@ Offsets du corps du message de 50 octets (`01 04 02 2e …`) :
 | 19 | 1 au premier message de `session-1` (rameur juste branché, jamais démarré), 0 dans tous les autres messages (459 analysés) | **drapeau** : probablement « pas encore démarré depuis le branchement », effacé au premier start |
 | 20 | 1 depuis le branchement jusqu’au premier retour au repos (`0d` état 1), 0 ensuite, y compris pendant les sessions suivantes | **drapeau** : `session-1` (1 jusqu’à l’état 1 final), `session-2` (rameur déjà en marche à la connexion, 1 jusqu’à l’état 1 final), `session-3` et `session-4` (toujours 0) ; hypothèse : « aucune session terminée depuis le branchement » |
 | 16, 38-39, 42 | constants sur 459 messages, 3 résistances différentes : `46` (70), `2c 01` (300), `b4` (180) | inconnu ; peut-être la configuration du rameur ou de l’utilisateur (hypothèse sans preuve) |
-| 14-15, 17-18, 22-24, 27-29, 32-33, 37, 41, 43-44, 46-48 | toujours 0 sur 459 messages (les offsets 46-48 contiennent les coups et la cadence du 750R chez QZ) | inutilisés avec ce poll, ou jamais activés |
-| 31 | octet haut du temps de l’octet 30 (1 une fois, avec 298 s) ; 22 et 27 (octets hauts de 21 et 26) restent à 0 | le temps passe de 255 s : à décoder en u16 aux octets 30-31 (et probablement 21-22, 26-27) |
+| 14-15, 17-18, 23-24, 28-29, 32-33, 37, 41, 43-44, 46-48 | toujours 0 sur 459 messages (les offsets 46-48 contiennent les coups et la cadence du 750R chez QZ) | inutilisés avec ce poll, ou jamais activés |
 
 `ff 11`, octets 15-16 (u16 LE) : allure moyenne en s/500 m, **fortement probable**.
 Elle reste figée en pause alors que l’allure instantanée tombe à 0 et vaut
