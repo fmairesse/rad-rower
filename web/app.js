@@ -1,5 +1,11 @@
 import { RowerConnection } from "./rower.js";
 
+if (globalThis.isSecureContext && "serviceWorker" in navigator) {
+  navigator.serviceWorker.register("./service-worker.js").catch((error) => {
+    console.warn("Radrower offline support could not be enabled.", error);
+  });
+}
+
 if (!globalThis.Vue) {
   document.querySelector("#startup").textContent =
     "Vue.js could not be loaded. Check access to cdn.jsdelivr.net and reload the page.";
@@ -17,6 +23,9 @@ if (!globalThis.Vue) {
       const updated = ref({});
       const now = ref(Date.now());
       const hidden = ref(document.hidden);
+      const installPrompt = ref(null);
+      const installed = ref(globalThis.matchMedia?.("(display-mode: standalone)").matches ||
+        navigator.standalone === true);
       const supported = globalThis.isSecureContext && Boolean(navigator.bluetooth);
       const supportError = !globalThis.isSecureContext
         ? "Web Bluetooth requires HTTPS or localhost. An HTTP address on your local network is not sufficient."
@@ -141,21 +150,44 @@ if (!globalThis.Vue) {
         }
       }
       const visibilityChanged = () => { hidden.value = document.hidden; };
+      const beforeInstall = (event) => {
+        event.preventDefault();
+        installPrompt.value = event;
+      };
+      const appInstalled = () => {
+        installed.value = true;
+        installPrompt.value = null;
+      };
+      async function installApp() {
+        const prompt = installPrompt.value;
+        if (!prompt) return;
+        try {
+          await prompt.prompt();
+          await prompt.userChoice;
+        } finally {
+          installPrompt.value = null;
+        }
+      }
       let ticker;
       onMounted(() => {
         document.querySelector("#startup").remove();
         ticker = setInterval(() => { now.value = Date.now(); }, 1000);
         document.addEventListener("visibilitychange", visibilityChanged);
         globalThis.addEventListener("pagehide", disconnect);
+        globalThis.addEventListener("beforeinstallprompt", beforeInstall);
+        globalThis.addEventListener("appinstalled", appInstalled);
       });
       onUnmounted(() => {
         clearInterval(ticker);
         document.removeEventListener("visibilitychange", visibilityChanged);
         globalThis.removeEventListener("pagehide", disconnect);
+        globalThis.removeEventListener("beforeinstallprompt", beforeInstall);
+        globalThis.removeEventListener("appinstalled", appInstalled);
         disconnect();
       });
       return {
         state, stateLabel: computed(() => labels[state.value]), busy,
+        canInstall: computed(() => Boolean(installPrompt.value) && !installed.value), installApp,
         supported, supportError, error, warning, journal, cards, hidden, freshnessLabel,
         sessionState, sessionReady, sessionLabel, controlling, control, connect, disconnect,
         connectionHint: computed(() => state.value === "streaming"

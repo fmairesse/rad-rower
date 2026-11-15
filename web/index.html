@@ -4,7 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#102923">
+  <meta name="description" content="Live metrics and session controls for the ProForm Sport RL rowing machine.">
   <title>Radrower · Live metrics</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./styles.css">
   <script defer src="https://cdn.jsdelivr.net/npm/vue@3.5.13/dist/vue.global.prod.js"></script>
   <script type="module" src="./app.js"></script>
@@ -17,6 +20,7 @@
   <main id="app" v-cloak>
     <header>
       <a class="brand" href="./">RADROWER<span>SPORT RL / LIVE</span></a>
+      <button v-if="canInstall" class="install" type="button" @click="installApp">Install app</button>
       <span class="badge" :class="{ live: state === 'streaming' }">
         <span aria-hidden="true">●</span> {{ stateLabel }}
       </span>

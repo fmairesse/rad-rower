@@ -1,8 +1,8 @@
 # Radrower web dashboard
 
-A static Vue 3 dashboard for the ProForm Sport RL (`I_RW`), using Web Bluetooth.
-Vue **3.5.13** is loaded from jsDelivr. No npm installation, Node.js project,
-bundler, backend, or BLE proxy is needed.
+A static Vue 3 progressive web app (PWA) dashboard for the ProForm Sport RL
+(`I_RW`), using Web Bluetooth. Vue **3.5.13** is loaded from jsDelivr. No npm
+installation, Node.js project, bundler, backend, or BLE proxy is needed.
 
 ## Open the page
 
@@ -16,7 +16,16 @@ busybox httpd -f -p 127.0.0.1:8080 -h web
 
 Open <http://localhost:8080> and stop the server with Ctrl+C when finished.
 Any static HTTP server is suitable; this command does not install dependencies.
-Internet access is needed to load Vue from the CDN.
+Internet access is needed on the first visit to load Vue from the CDN. The
+service worker caches the app shell and makes a best-effort cache of Vue, so a
+previously loaded app can reopen offline. Browser storage may be cleared, and
+the first visit cannot work offline. The service worker requires HTTPS or
+localhost, just like Web Bluetooth.
+
+When the browser supports PWA installation, use its install control or the
+**Install app** button in the page header. The installed app still needs a
+compatible browser with Web Bluetooth and an available Bluetooth adapter to
+connect to the rower; offline mode only makes the interface assets available.
 
 An unencrypted LAN URL such as `http://192.168.x.x:8080` is **not** a secure
 context, including when accessed from a phone. To use a phone, host the files on

@@ -24,7 +24,10 @@ le 2026-11-14 après un essai réel : puissance (W), distance (m), résistance
 (`unset` tant qu’elle n’a pas été réglée), cadence
 (coups/min), nombre de coups, allure (s/500 m) et vitesse (trame `ff 11`).
 
-`web/` propose un tableau de bord Vue 3 (CDN, sans projet Node.js)
+`web/` propose un tableau de bord Vue 3 (CDN, sans projet Node.js), installable
+comme PWA avec cache du shell hors ligne après une première visite en ligne.
+Le service worker met en cache Vue depuis le CDN au mieux; Bluetooth exige
+toujours un navigateur compatible et HTTPS/localhost.
 avec Web Bluetooth : même init et poll, toutes les métriques décodées par
 `03-telemetry.py`, commandes start/pause/reprise/arrêt, déconnexion manuelle
 et signalement des valeurs non actualisées. Les tests JavaScript comparent les
