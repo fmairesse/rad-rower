@@ -38,3 +38,15 @@ conversation. Si un choix change, indiquer quelle décision le remplace.
   confirmée par un essai sur notre rameur (connexion maintenue).
 - Conséquence : toute trame ajoutée doit être comparée à QZ ou à une capture ;
   aucune commande de pilotage sans accord explicite.
+
+## D004 - Store web workouts in IndexedDB
+
+- Date: 2026-11-15.
+- Status: adopted.
+- Decision: store session metadata and timestamped metric deltas in separate
+  IndexedDB stores, rather than serializing growing histories in localStorage.
+- Reason: asynchronous writes and indexed sample queries suit future charts.
+- Consequence: recordings survive reloads; interrupted recordings are kept but
+  not treated as completed. `synced` stays false until remote storage succeeds.
+- Limits: one active tab, origin-local storage, possible browser eviction and
+  pending-write loss on abrupt closure. No device identifiers are retained.

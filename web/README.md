@@ -102,12 +102,31 @@ reconstruct cumulative distance or calories from earlier readings.
 See the [protocol notes](../docs/protocole-ble.md) for observed offsets,
 unknown fields, and hardware validation history.
 
+## Local workout storage
+
+Workouts are stored in IndexedDB (`radrower`, version 1), scoped to this
+browser and origin. The `sessions` store holds UUID, start/end timestamps,
+status (`recording`, `completed`, `interrupted`), last available metrics,
+sample count, a `partial` flag for workouts joined in progress, and `synced`
+(initially `false`). The separate `samples` store holds every received metric
+delta with a timestamp and sequence number, including unavailable (`null`)
+values and pause/resume states. It is indexed by session UUID for future charts.
+No Bluetooth identifiers are stored. Idle counters do not overwrite final totals.
+
+Each notification is saved asynchronously in an atomic transaction. Stop or a
+reported end/idle state completes a workout; disconnection marks it interrupted.
+On reopening, unfinished recordings are recovered as interrupted at their last
+saved sample. Closing a page can lose pending writes, but not earlier committed
+samples. Use only one Radrower tab at a time. Storage errors are shown in the UI;
+browser eviction, private browsing or clearing site data can delete history.
+Storage is not a backup and is not shared across devices or hosting origins.
+
 ## Tests
 
 With an existing Node.js **22.7+** installation (optional, tests only):
 
 ```sh
-node --experimental-default-type=module --test web/protocol.test.js web/rower.test.js web/wake-lock.test.js
+node --experimental-default-type=module --test web/*.test.js
 ```
 
 Run this command from the repository root. Tests use Node's built-in runner,

@@ -1,5 +1,6 @@
 import { RowerConnection } from "./rower.js";
 import { SessionWakeLock } from "./wake-lock.js";
+import { SessionStore, SessionRecorder } from "./sessions.js";
 
 if (globalThis.isSecureContext && "serviceWorker" in navigator) {
   navigator.serviceWorker.register("./service-worker.js").catch((error) => {
@@ -20,6 +21,17 @@ if (!globalThis.Vue) {
       const error = ref("");
       const warning = ref("");
       const wakeLockWarning = ref("");
+      const storageWarning = ref("");
+      const savedSessions = ref([]);
+      const store = new SessionStore();
+      const refreshSessions = async () => { savedSessions.value = await store.list(); };
+      const recorder = new SessionRecorder(store, {
+        onChange: refreshSessions,
+        onError: (cause) => { storageWarning.value = `Workout storage: ${cause.message}`; },
+      });
+      const storageReady = recorder.recover().then(refreshSessions).catch((cause) => {
+        storageWarning.value = `Workout storage: ${cause.message}`;
+      });
       const journal = ref([]);
       const metrics = ref({});
       const updated = ref({});
@@ -49,11 +61,13 @@ if (!globalThis.Vue) {
         bluetooth: navigator.bluetooth,
         onState(value) {
           state.value = value;
+          if (value === "disconnected") recorder.finish("interrupted");
           wakeLock.setActive(value === "streaming" && metrics.value.sessionState === 2);
           log(labels[value]);
         },
         onMetrics(values) {
           const timestamp = Date.now();
+          recorder.record(values);
           metrics.value = { ...metrics.value, ...values };
           wakeLock.setActive(state.value === "streaming" && metrics.value.sessionState === 2);
           for (const key of Object.keys(values)) updated.value[key] = timestamp;
@@ -126,6 +140,7 @@ if (!globalThis.Vue) {
         updated.value = {};
         busy.value = true;
         try {
+          await storageReady;
           await connection.connect();
         } catch (cause) {
           error.value = `Connection failed: ${cause.message || String(cause)}`;
@@ -148,6 +163,7 @@ if (!globalThis.Vue) {
         controlling.value = true;
         try {
           await connection.control(action);
+          if (action === "stop") await recorder.finish();
           log(action === "stop" ? "Session stopped." : "Session state confirmed.");
         } catch (cause) {
           error.value = `Session command: ${cause.message || String(cause)}`;
@@ -200,7 +216,8 @@ if (!globalThis.Vue) {
       return {
         state, stateLabel: computed(() => labels[state.value]), busy,
         canInstall: computed(() => Boolean(installPrompt.value) && !installed.value), installApp,
-        supported, supportError, error, warning, wakeLockWarning, journal, cards, hidden, freshnessLabel,
+        supported, supportError, error, warning, wakeLockWarning, storageWarning, savedSessions,
+        journal, cards, hidden, freshnessLabel,
         sessionState, sessionReady, sessionLabel, controlling, control, connect, disconnect,
         connectionHint: computed(() => state.value === "streaming"
           ? "I_RW · Metrics and session"

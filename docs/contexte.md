@@ -68,6 +68,11 @@ notes de protocole.
 
 ## Acquis vérifiés
 
+- `web/sessions.js` enregistre les séances et les échantillons horodatés dans
+  IndexedDB, avec `synced: false`, pauses/reprises, fin et interruption.
+  `web/sessions.test.js` couvre le cycle et les erreurs de stockage ; les 22
+  tests web passent. Le stockage réel du navigateur reste à vérifier.
+
 - Environnement : adaptateur Bluetooth et `bluetoothctl` 5.72 disponibles ;
   Bleak fonctionne (`poetry` dans `bleak/`) ; le rameur s’annonce `I_RW`.
 - Services GATT, UUID, cadrage des messages (`fe 02 …` / `00 12` / `ff …`) et
