@@ -2,7 +2,7 @@ import { RowerConnection } from "./rower.js";
 
 if (!globalThis.Vue) {
   document.querySelector("#startup").textContent =
-    "Vue.js n’a pas pu être chargé. Vérifiez l’accès à cdn.jsdelivr.net puis rechargez la page.";
+    "Vue.js could not be loaded. Check access to cdn.jsdelivr.net and reload the page.";
 } else {
   const { createApp, ref, computed, onMounted, onUnmounted } = globalThis.Vue;
   createApp({
@@ -19,16 +19,16 @@ if (!globalThis.Vue) {
       const hidden = ref(document.hidden);
       const supported = globalThis.isSecureContext && Boolean(navigator.bluetooth);
       const supportError = !globalThis.isSecureContext
-        ? "Web Bluetooth exige HTTPS ou localhost. Une adresse HTTP du réseau local ne suffit pas."
-        : "Web Bluetooth n’est pas disponible ici. Essayez Chrome ou Edge compatible (pas Firefox ou Safari).";
+        ? "Web Bluetooth requires HTTPS or localhost. An HTTP address on your local network is not sufficient."
+        : "Web Bluetooth is not available here. Try a compatible version of Chrome or Edge (not Firefox or Safari).";
       const labels = {
-        disconnected: "Déconnecté",
-        connecting: "Connexion",
-        initializing: "Initialisation",
-        streaming: "Connecté",
+        disconnected: "Disconnected",
+        connecting: "Connecting",
+        initializing: "Initializing",
+        streaming: "Connected",
       };
       const log = (text) => {
-        journal.value.unshift({ time: new Date().toLocaleTimeString("fr-FR"), text });
+        journal.value.unshift({ time: new Date().toLocaleTimeString("en-US"), text });
         journal.value = journal.value.slice(0, 40);
       };
       const connection = new RowerConnection({
@@ -49,29 +49,29 @@ if (!globalThis.Vue) {
         },
         onError(cause) {
           error.value = cause.name === "NotFoundError"
-            ? "Sélection annulée ou rameur introuvable. Allumez-le et réessayez."
-            : `Connexion interrompue : ${cause.message || String(cause)}`;
+            ? "Selection cancelled or rower not found. Turn it on and try again."
+            : `Connection interrupted: ${cause.message || String(cause)}`;
           log(error.value);
         },
       });
       const isStale = (key) => updated.value[key] &&
         (state.value !== "streaming" || now.value - updated.value[key] > 5000);
       const definitions = [
-        ["watts", "Puissance", "W"],
-        ["pace", "Allure / 500 m", "/ 500 m"],
-        ["averagePace", "Allure moyenne", "/ 500 m"],
-        ["cadence", "Cadence", "coups/min"],
+        ["watts", "Power", "W"],
+        ["pace", "Pace / 500 m", "/ 500 m"],
+        ["averagePace", "Average pace", "/ 500 m"],
+        ["cadence", "Cadence", "strokes/min"],
         ["distance", "Distance", "m"],
-        ["strokes", "Nombre de coups", "coups"],
-        ["speed", "Vitesse", "km/h"],
-        ["resistance", "Résistance", "/ 24"],
-        ["elapsed", "Temps écoulé", ""],
-        ["paused", "Temps en pause", ""],
+        ["strokes", "Stroke count", "strokes"],
+        ["speed", "Speed", "km/h"],
+        ["resistance", "Resistance", "/ 24"],
+        ["elapsed", "Elapsed time", ""],
+        ["paused", "Paused time", ""],
         ["calories", "Calories", "kcal"],
-        ["caloriesPerHour", "Dépense estimée", "kcal/h"],
-        ["averageWatts", "Puissance moyenne", "W"],
+        ["caloriesPerHour", "Estimated burn", "kcal/h"],
+        ["averageWatts", "Average power", "W"],
       ];
-      const number = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 2 });
+      const number = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 });
       const cards = computed(() => definitions.map(([key, label, unit]) => {
         const value = metrics.value[key];
         const received = Boolean(updated.value[key]);
@@ -81,27 +81,27 @@ if (!globalThis.Vue) {
         }
         return {
           key, label, unit, value: display, stale: Boolean(isStale(key)),
-          note: !received ? "En attente de données" : isStale(key) ? "Dernière valeur · non actualisée" :
-            key === "resistance" && value == null ? "Niveau non transmis par le rameur" :
-            key === "speed" ? "Calculée à partir de l’allure" :
-            key === "caloriesPerHour" ? "Estimation à partir de la puissance" :
-            ["paused", "averagePace", "averageWatts"].includes(key) ? "Interprétation probable, à confirmer" :
-            value == null ? "Valeur indisponible" : "Donnée du rameur",
+          note: !received ? "Waiting for data" : isStale(key) ? "Last value · not up to date" :
+            key === "resistance" && value == null ? "Level not reported by the rower" :
+            key === "speed" ? "Calculated from pace" :
+            key === "caloriesPerHour" ? "Estimated from power" :
+            ["paused", "averagePace", "averageWatts"].includes(key) ? "Likely interpretation, not yet confirmed" :
+            value == null ? "Value unavailable" : "Data from the rower",
         };
       }));
       const freshnessLabel = computed(() => {
         if (state.value === "disconnected") {
           return Object.keys(updated.value).length
-            ? "Déconnecté · les dernières valeurs sont conservées à titre indicatif."
-            : "Les métriques apparaîtront après la connexion.";
+            ? "Disconnected · last values are retained for reference."
+            : "Metrics will appear after connecting.";
         }
-        if (state.value !== "streaming") return "Préparation de la lecture des métriques…";
+        if (state.value !== "streaming") return "Preparing to read metrics…";
         const required = ["watts", "cadence"];
         if (required.some((key) => !updated.value[key])) {
-          return "En attente des deux groupes de métriques du rameur…";
+          return "Waiting for both groups of rower metrics…";
         }
-        if (required.some(isStale)) return "Attention : certaines métriques ne sont plus actualisées.";
-        return "Réception en direct · interrogation toutes les 0,6 s.";
+        if (required.some(isStale)) return "Warning: some metrics are no longer up to date.";
+        return "Receiving live data · polling every 0.6 s.";
       });
       async function connect() {
         error.value = "";
@@ -112,7 +112,7 @@ if (!globalThis.Vue) {
         try {
           await connection.connect();
         } catch (cause) {
-          error.value = `Connexion impossible : ${cause.message || String(cause)}`;
+          error.value = `Connection failed: ${cause.message || String(cause)}`;
           log(error.value);
         } finally {
           busy.value = false;
@@ -125,16 +125,16 @@ if (!globalThis.Vue) {
       const sessionReady = computed(() => state.value === "streaming" &&
         !controlling.value && Boolean(updated.value.sessionState) && !isStale("sessionState"));
       const sessionLabel = computed(() => ({
-        1: "Au repos", 2: "En cours", 3: "En pause", 4: "Terminée",
-      }[sessionState.value] || "État indisponible"));
+        1: "Idle", 2: "In progress", 3: "Paused", 4: "Finished",
+      }[sessionState.value] || "State unavailable"));
       async function control(action) {
         error.value = "";
         controlling.value = true;
         try {
           await connection.control(action);
-          log(action === "stop" ? "Séance arrêtée." : "État de la séance confirmé.");
+          log(action === "stop" ? "Session stopped." : "Session state confirmed.");
         } catch (cause) {
-          error.value = `Commande de séance : ${cause.message || String(cause)}`;
+          error.value = `Session command: ${cause.message || String(cause)}`;
           log(error.value);
         } finally {
           controlling.value = false;
@@ -159,10 +159,10 @@ if (!globalThis.Vue) {
         supported, supportError, error, warning, journal, cards, hidden, freshnessLabel,
         sessionState, sessionReady, sessionLabel, controlling, control, connect, disconnect,
         connectionHint: computed(() => state.value === "streaming"
-          ? "I_RW · Métriques et séance"
-          : state.value === "initializing" ? "Initialisation du protocole en cours…"
-          : state.value === "connecting" ? "Sélection et connexion Bluetooth…"
-          : "Allumez le rameur et libérez sa connexion Bluetooth."),
+          ? "I_RW · Metrics and session"
+          : state.value === "initializing" ? "Initializing the protocol…"
+          : state.value === "connecting" ? "Selecting and connecting via Bluetooth…"
+          : "Turn on the rower and free its Bluetooth connection."),
       };
     },
   }).mount("#app");

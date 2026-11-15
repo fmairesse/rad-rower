@@ -31,12 +31,12 @@ forwarding setup exposing the server as localhost.
    Web Bluetooth features; the API being present does not guarantee that the
    system Bluetooth adapter is available.
 2. Turn on the rower. Disconnect iFit, Bleak scripts and other BLE clients.
-3. Click **Connecter le rameur** and select **I_RW** in the browser's device
+3. Click **Connect rower** and select **I_RW** in the browser's device
    chooser. Bluetooth permission requires this user gesture.
-4. Wait for initialization and a fresh session state. **Démarrer** starts a
-  session; **Pause** pauses it, and **Reprendre** resumes it. **Arrêter** ends
+4. Wait for initialization and a fresh session state. **Start** starts a
+  session; **Pause** pauses it, and **Resume** resumes it. **Stop** ends
   a running or paused session. Compare the readings with the console.
-5. Click **Déconnecter** to stop polling and close the GATT connection. This
+5. Click **Disconnect** to stop polling and close the GATT connection. This
   does not send a stop command.
 
 Keep the tab visible and the screen awake. Browser timer throttling or system

@@ -157,9 +157,9 @@ test("decodes offset DataViews, ignores invalid checksums and surfaces malformed
   frames.at(-1)[15] ^= 1;
   frames.forEach((frame) => emit(f.notify, frame));
   assert.equal(f.metrics.length, 1);
-  assert.match(f.warnings.at(-1), /somme de contrôle/);
+  assert.match(f.warnings.at(-1), /checksum/);
   emit(f.notify, new Uint8Array(4));
-  assert.match(f.warnings.at(-1), /4 octets/);
+  assert.match(f.warnings.at(-1), /4 bytes/);
   f.connection.disconnect();
   frames.forEach((frame) => emit(f.notify, frame));
   assert.equal(f.metrics.length, 1);
@@ -206,7 +206,7 @@ test("reports unexpected disconnection and stops writes", async () => {
   await delay(200);
   assert.equal(f.writes.length, count);
   assert.equal(f.errors.length, 1);
-  assert.match(f.errors[0].message, /déconnecté/);
+  assert.match(f.errors[0].message, /disconnected/);
   assert.equal(f.events.at(-1), "disconnected");
 });
 
@@ -214,12 +214,12 @@ test("confirms start, pause, resume and stop without overlapping poll writes", a
   const f = fixture();
   t.after(() => f.connection.disconnect());
   await f.connection.connect();
-  await assert.rejects(f.connection.control("toggle"), /indisponible/);
+  await assert.rejects(f.connection.control("toggle"), /unavailable/);
   emitState(f.notify, 1);
   for (const expected of [2, 3, 2]) {
     const after = f.writes.length;
     const command = f.connection.control("toggle");
-    await assert.rejects(f.connection.control("toggle"), /déjà en cours/);
+    await assert.rejects(f.connection.control("toggle"), /already in progress/);
     await confirmCommand(f, expected, after);
     await command;
   }
@@ -246,7 +246,7 @@ test("stops a paused session without another pause and cancels on disconnect", a
     frame[1] === 0x0d && frame[12] === 3).length, 0);
   emitState(f.notify, 1);
   const command = f.connection.control("toggle");
-  const rejected = assert.rejects(command, /Connexion annulée/);
+  const rejected = assert.rejects(command, /Connection cancelled/);
   await confirmCommand(f, 2, f.writes.length);
   f.connection.disconnect();
   await rejected;
@@ -258,7 +258,7 @@ test("does not continue stopping when pause is not confirmed", async (t) => {
   await f.connection.connect();
   emitState(f.notify, 2);
   const after = f.writes.length;
-  await assert.rejects(f.connection.control("stop"), /pas confirmé/);
+  await assert.rejects(f.connection.control("stop"), /did not confirm/);
   const commands = f.writes.slice(after).filter((frame) => frame[0] === 0xff && frame[1] === 0x0d);
   assert.deepEqual(commands.map((frame) => frame[12]), [3]);
 });

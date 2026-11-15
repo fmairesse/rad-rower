@@ -1,19 +1,19 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#102923">
-  <title>Radrower · Métriques en direct</title>
+  <title>Radrower · Live metrics</title>
   <link rel="stylesheet" href="./styles.css">
   <script defer src="https://cdn.jsdelivr.net/npm/vue@3.5.13/dist/vue.global.prod.js"></script>
   <script type="module" src="./app.js"></script>
 </head>
 <body>
   <div id="startup" role="alert">
-    Chargement de Vue.js… Si ce message persiste, vérifiez l’accès au CDN et rechargez la page.
+    Loading Vue.js… If this message persists, check access to the CDN and reload the page.
   </div>
-  <noscript>Activez JavaScript pour utiliser Radrower.</noscript>
+  <noscript>Enable JavaScript to use Radrower.</noscript>
   <main id="app" v-cloak>
     <header>
       <a class="brand" href="./">RADROWER<span>SPORT RL / LIVE</span></a>
@@ -24,35 +24,35 @@
 
     <section class="intro">
       <p class="eyebrow">PROFORM SPORT RL</p>
-      <h1>Chaque coup<br><em>compte.</em></h1>
-      <p class="subtitle">Les métriques du rameur, en direct dans votre navigateur.</p>
+      <h1>Every stroke<br><em>counts.</em></h1>
+      <p class="subtitle">Your rower's metrics, live in your browser.</p>
     </section>
 
-    <section v-if="state === 'streaming'" class="session" aria-label="Séance d’entraînement">
+    <section v-if="state === 'streaming'" class="session" aria-label="Workout session">
       <div>
-        <h2>Séance</h2>
+        <h2>Session</h2>
         <p role="status">{{ sessionLabel }}</p>
       </div>
       <div class="actions">
         <button :disabled="!sessionReady || ![1, 2, 3].includes(sessionState)" @click="control('toggle')">
-          {{ sessionState === 2 ? 'Pause' : sessionState === 3 ? 'Reprendre' : 'Démarrer' }}
+          {{ sessionState === 2 ? 'Pause' : sessionState === 3 ? 'Resume' : 'Start' }}
         </button>
         <button v-if="[2, 3].includes(sessionState)" class="secondary"
-                :disabled="!sessionReady" @click="control('stop')">Arrêter</button>
+                :disabled="!sessionReady" @click="control('stop')">Stop</button>
       </div>
     </section>
 
-    <section class="connection" aria-label="Connexion Bluetooth">
+    <section class="connection" aria-label="Bluetooth connection">
       <div>
-        <h2>Votre rameur</h2>
+        <h2>Your rower</h2>
         <p>{{ connectionHint }}</p>
       </div>
       <div class="actions">
         <button :disabled="!supported || busy || state !== 'disconnected'" @click="connect">
-          {{ busy ? 'Connexion en cours…' : 'Connecter le rameur' }}
+          {{ busy ? 'Connecting…' : 'Connect rower' }}
         </button>
         <button v-if="state !== 'disconnected'" class="secondary" @click="disconnect">
-          Déconnecter
+          Disconnect
         </button>
       </div>
     </section>
@@ -63,11 +63,11 @@
     <p v-if="error" class="notice error" role="alert">{{ error }}</p>
     <p v-if="warning" class="notice" role="status">{{ warning }}</p>
     <p v-if="hidden && state !== 'disconnected'" class="notice" role="status">
-      Gardez cet onglet visible et l’écran allumé : la mise en veille peut interrompre les échanges.
+      Keep this tab visible and the screen awake: sleep mode may interrupt communication.
     </p>
     <p class="freshness" role="status">{{ freshnessLabel }}</p>
 
-    <section class="metrics" aria-label="Métriques du rameur">
+    <section class="metrics" aria-label="Rower metrics">
       <article v-for="card in cards" :key="card.key" class="metric"
                :class="{ primary: card.key === 'watts', stale: card.stale }">
         <h2>{{ card.label }}</h2>
@@ -77,26 +77,25 @@
     </section>
 
     <section class="help">
-      <h2>Connexion et compatibilité</h2>
-      <p>Allumez le rameur, fermez iFit et les scripts Bleak, puis sélectionnez
-        <strong>I_RW</strong> dans la fenêtre Bluetooth. L’initialisation prend quelques secondes.</p>
-      <p>La résistance reste inconnue
-        tant que le rameur ne l’a pas transmise.</p>
-      <p>Utilisez Chrome ou Edge compatible Web Bluetooth, sur HTTPS ou localhost.
-        Sur Linux, la disponibilité dépend du navigateur et de sa configuration.
-        Gardez cet onglet au premier plan.</p>
+      <h2>Connection and compatibility</h2>
+      <p>Turn on the rower, close iFit and any Bleak scripts, then select
+        <strong>I_RW</strong> in the Bluetooth window. Initialization takes a few seconds.</p>
+      <p>Resistance remains unknown until the rower reports it.</p>
+      <p>Use a version of Chrome or Edge that supports Web Bluetooth, over HTTPS or localhost.
+        On Linux, availability depends on the browser and its configuration.
+        Keep this tab in the foreground.</p>
     </section>
 
     <details>
-      <summary>Journal de connexion</summary>
-      <p>Conservé uniquement en mémoire dans cet onglet. Aucun identifiant Bluetooth enregistré.</p>
+      <summary>Connection log</summary>
+      <p>Stored only in memory in this tab. No Bluetooth identifiers are saved.</p>
       <ol class="log">
         <li v-for="(entry, index) in journal" :key="index">
           <time>{{ entry.time }}</time> {{ entry.text }}
         </li>
       </ol>
     </details>
-    <footer>RADROWER <span>Bluetooth LE · Vue.js · Sans serveur applicatif</span></footer>
+    <footer>RADROWER <span>Bluetooth LE · Vue.js · No application server</span></footer>
   </main>
 </body>
 </html>

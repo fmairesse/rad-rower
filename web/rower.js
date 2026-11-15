@@ -33,13 +33,13 @@ export class RowerConnection {
   check(session) {
     session.abort.signal.throwIfAborted();
     if (session !== this.session || !session.device?.gatt.connected) {
-      throw new Error("La connexion Bluetooth est interrompue.");
+      throw new Error("The Bluetooth connection was interrupted.");
     }
   }
 
   async connect() {
     if (this.connecting || this.session) {
-      throw new Error("Une connexion est déjà en cours.");
+      throw new Error("A connection is already in progress.");
     }
     this.connecting = true;
     const session = {
@@ -61,7 +61,7 @@ export class RowerConnection {
       });
       session.abort.signal.throwIfAborted();
       session.disconnected = () => this.fail(session,
-        new Error("Le rameur s’est déconnecté. Rapprochez-le puis reconnectez-vous."));
+        new Error("The rower disconnected. Move it closer and reconnect."));
       session.device.addEventListener("gattserverdisconnected", session.disconnected);
       const server = await session.device.gatt.connect();
       if (session.abort.signal.aborted) {
@@ -106,7 +106,7 @@ export class RowerConnection {
     const frame = new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
     if (frame.length !== 20) {
       session.assembler.reset();
-      this.onWarning(`Notification ignorée : ${frame.length} octets au lieu de 20.`);
+      this.onWarning(`Notification ignored: ${frame.length} bytes instead of 20.`);
       return;
     }
     const motion = decodeMotionFrame(frame);
@@ -114,7 +114,7 @@ export class RowerConnection {
     const message = session.assembler.feed(frame);
     if (!message) return;
     if (!message.checksumOk) {
-      this.onWarning("Message ignoré : somme de contrôle incorrecte.");
+      this.onWarning("Message ignored: invalid checksum.");
       return;
     }
     const metrics = decodeMessage(message.body);
@@ -149,19 +149,19 @@ export class RowerConnection {
       if (session.stateVersion > version && session.rowerState === expected) return;
       await wait(100, session.abort.signal);
     }
-    if (required) throw new Error("Le rameur n’a pas confirmé le changement d’état. Vérifiez sa console avant de réessayer.");
+    if (required) throw new Error("The rower did not confirm the state change. Check its console before trying again.");
   }
 
   async control(action) {
     const session = this.session;
     if (!session || !session.ready || session.controlling ||
         performance.now() - session.stateAt > 5000 || !session.stateAt) {
-      throw new Error("État du rameur indisponible ou commande déjà en cours.");
+      throw new Error("Rower state unavailable or command already in progress.");
     }
     const state = session.rowerState;
     if (action === "toggle" && ![1, 2, 3].includes(state) ||
         action === "stop" && ![2, 3].includes(state) || !["toggle", "stop"].includes(action)) {
-      throw new Error("Cette commande n’est pas disponible dans l’état actuel du rameur.");
+      throw new Error("This command is not available in the rower's current state.");
     }
     session.controlling = true;
     try {
@@ -200,7 +200,7 @@ export class RowerConnection {
     const session = this.session;
     this.session = null;
     if (session) {
-      session.abort.abort(new DOMException("Connexion annulée.", "AbortError"));
+      session.abort.abort(new DOMException("Connection cancelled.", "AbortError"));
       session.notify?.removeEventListener("characteristicvaluechanged", session.notification);
       if (session.disconnected) {
         session.device.removeEventListener("gattserverdisconnected", session.disconnected);
