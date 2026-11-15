@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
-  SETUP, POLL, MessageAssembler, decodeMessage, decodeMotionFrame,
+  SETUP, POLL, START, PAUSE, END, IDLE, MessageAssembler, decodeMessage, decodeMotionFrame,
 } from "./protocol.js";
 
 function seal(body) {
@@ -57,7 +57,7 @@ test("all init and poll bytes match the validated Bleak reference", async () => 
     .map((match) => [...match[1].matchAll(/"([a-f0-9]{8,})"|\b(H\w+)\b/g)]
       .map((token) => token[1] ?? headers[token[2]]))
     .filter((frames) => frames.length);
-  const actual = [...SETUP, ...POLL]
+  const actual = [...SETUP, ...POLL, ...START, ...PAUSE, ...END, ...IDLE]
     .map((frames) => frames.map((frame) => Buffer.from(frame).toString("hex")));
   assert.deepEqual(actual, reference);
   assert.equal(SETUP.flat().length, 25);
@@ -70,7 +70,8 @@ test("reassembles telemetry, ignores stale header padding and checks checksum", 
   for (const frame of frames.slice(0, -1)) assert.equal(assembler.feed(frame), null);
   const result = assembler.feed(frames.at(-1));
   assert.equal(result.checksumOk, true);
-  assert.deepEqual(decodeMessage(result.body), { watts: 300, distance: 1234, resistance: 24 });
+  assert.deepEqual(decodeMessage(result.body), { watts: 300, distance: 1234, resistance: 24,
+    sessionState: 0, elapsed: 0, calories: 0, averageWatts: 0, paused: 0, caloriesPerHour: 1148 });
   frames[1][12] ^= 1;
   let corrupted;
   for (const frame of frames) corrupted = assembler.feed(frame);
@@ -98,13 +99,13 @@ test("recovers after missing, out-of-order, truncated and oversized frames", () 
 test("decodes motion, zero pace and little-endian stroke count", () => {
   const frame = motionFrame();
   assert.deepEqual(decodeMotionFrame(frame), {
-    strokes: 37, cadence: 24, pace: 275, speed: 1800 / 275,
+    strokes: 37, cadence: 24, pace: 275, speed: 1800 / 275, averagePace: null,
   });
   frame[11] = 1;
   frame[13] = 0;
   frame[14] = 0;
   assert.deepEqual(decodeMotionFrame(frame), {
-    strokes: 293, cadence: 24, pace: null, speed: 0,
+    strokes: 293, cadence: 24, pace: null, speed: 0, averagePace: null,
   });
   frame[2] = 1;
   assert.equal(decodeMotionFrame(frame), null);
@@ -130,7 +131,27 @@ test("handles unset, unknown and all validated resistance encodings without inve
     assert.equal(decodeMessage(body).resistance, expected[index]);
   });
   body.fill(0xff, 10, 18);
-  assert.deepEqual(decodeMessage(body), { watts: null, distance: null, resistance: null });
+  assert.deepEqual(decodeMessage(body), { watts: null, distance: null, resistance: null,
+    sessionState: null, elapsed: null, calories: null, averageWatts: null, paused: null, caloriesPerHour: null });
+});
+
+test("decodes session telemetry and average pace using the Python offsets", () => {
+  const body = telemetryBody();
+  body[21] = 0x2c; body[22] = 1; body[25] = 3;
+  body[34] = 0xa0; body[35] = 0x86; body[36] = 1;
+  body[40] = 85; body[45] = 12;
+  const values = decodeMessage(body);
+  assert.equal(values.elapsed, 300);
+  assert.equal(values.sessionState, 3);
+  assert.equal(values.calories, 1);
+  assert.equal(values.averageWatts, 85);
+  assert.equal(values.paused, 12);
+  assert.equal(values.caloriesPerHour, 1148);
+  body[10] = 0; body[11] = 0;
+  assert.equal(decodeMessage(body).caloriesPerHour, null);
+  const frame = motionFrame();
+  frame[15] = 0x4a; frame[16] = 1;
+  assert.equal(decodeMotionFrame(frame).averagePace, 330);
 });
 
 test("handles alternate 33-byte pace messages and rejects unknown payloads", () => {

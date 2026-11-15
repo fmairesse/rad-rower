@@ -28,6 +28,20 @@
       <p class="subtitle">Les métriques du rameur, en direct dans votre navigateur.</p>
     </section>
 
+    <section v-if="state === 'streaming'" class="session" aria-label="Séance d’entraînement">
+      <div>
+        <h2>Séance</h2>
+        <p role="status">{{ sessionLabel }}</p>
+      </div>
+      <div class="actions">
+        <button :disabled="!sessionReady || ![1, 2, 3].includes(sessionState)" @click="control('toggle')">
+          {{ sessionState === 2 ? 'Pause' : sessionState === 3 ? 'Reprendre' : 'Démarrer' }}
+        </button>
+        <button v-if="[2, 3].includes(sessionState)" class="secondary"
+                :disabled="!sessionReady" @click="control('stop')">Arrêter</button>
+      </div>
+    </section>
+
     <section class="connection" aria-label="Connexion Bluetooth">
       <div>
         <h2>Votre rameur</h2>
@@ -63,11 +77,10 @@
     </section>
 
     <section class="help">
-      <h2>Une connexion, rien de plus.</h2>
+      <h2>Connexion et compatibilité</h2>
       <p>Allumez le rameur, fermez iFit et les scripts Bleak, puis sélectionnez
         <strong>I_RW</strong> dans la fenêtre Bluetooth. L’initialisation prend quelques secondes.</p>
-      <p>Cette page lit les métriques par interrogation périodique. Elle ne modifie pas
-        la résistance et ne démarre ni n’arrête de séance. La résistance reste inconnue
+      <p>La résistance reste inconnue
         tant que le rameur ne l’a pas transmise.</p>
       <p>Utilisez Chrome ou Edge compatible Web Bluetooth, sur HTTPS ou localhost.
         Sur Linux, la disponibilité dépend du navigateur et de sa configuration.

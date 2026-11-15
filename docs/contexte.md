@@ -24,10 +24,11 @@ le 2026-11-14 après un essai réel : puissance (W), distance (m), résistance
 (`unset` tant qu’elle n’a pas été réglée), cadence
 (coups/min), nombre de coups, allure (s/500 m) et vitesse (trame `ff 11`).
 
-`web/` propose maintenant un tableau de bord Vue 3 (CDN, sans projet Node.js)
-avec Web Bluetooth : même init et poll, sept métriques, déconnexion manuelle
-et signalement des valeurs non actualisées. Les 11 tests JavaScript passent
-(dont comparaison de toutes les écritures à `bleak/rower.py` et GATT simulé).
+`web/` propose un tableau de bord Vue 3 (CDN, sans projet Node.js)
+avec Web Bluetooth : même init et poll, toutes les métriques décodées par
+`03-telemetry.py`, commandes start/pause/reprise/arrêt, déconnexion manuelle
+et signalement des valeurs non actualisées. Les tests JavaScript comparent les
+écritures à `bleak/rower.py` et simulent les transitions de séance en GATT.
 L’affichage a été vérifié dans un navigateur avec des notifications simulées,
 y compris l’absence de Web Bluetooth, l’échec du CDN et les valeurs périmées.
 **La connexion web au vrai rameur n’a pas encore été testée.**
@@ -93,8 +94,8 @@ champs sont décodés (voir les notes de protocole) ; `03-telemetry.py` les affi
 et reste à vérifier en direct sur le rameur (temps, calories, cals/hr calculées,
 puissance moyenne, durée de pause, allure moyenne). Restent inconnus : octets 16,
 38-39, 42 (constants) ; 19 et 20 sont des drapeaux de l’historique depuis le branchement, messages `0c`, durée d’inactivité avant l’état 10 (probable fin automatique de session). Ensuite, chercher à simplifier l’init
-et les messages par essais, puis intégrer dans `web/` ou l’application Android
-(et tester `web/` sur le vrai rameur).
+et les messages par essais, puis intégrer dans l’application Android et tester
+la connexion, les métriques et les commandes de `web/` sur le vrai rameur.
 Ne pas envoyer de commande modifiant le rameur
 (résistance, start/stop) sans accord explicite.
 

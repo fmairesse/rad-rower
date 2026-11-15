@@ -90,6 +90,23 @@ function emit(notify, frame) {
   notify.dispatchEvent(new Event("characteristicvaluechanged"));
 }
 
+function emitState(notify, state) {
+  const body = new Uint8Array(50);
+  body.set([1, 4, 2, 0x2e, 0x14, 0x2e, 2, 2]);
+  body[25] = state;
+  body[49] = body.slice(4, -1).reduce((sum, byte) => sum + byte, 0) & 0xff;
+  emit(notify, Uint8Array.from([0xfe, 2, 50, 4, ...new Uint8Array(16)]));
+  emit(notify, Uint8Array.from([0, 18, ...body.slice(0, 18)]));
+  emit(notify, Uint8Array.from([1, 18, ...body.slice(18, 36)]));
+  emit(notify, Uint8Array.from([0xff, 14, ...body.slice(36), ...new Uint8Array(4)]));
+}
+
+async function confirmCommand(fixture, state, after) {
+  await until(() => fixture.writes.slice(after).some((frame) =>
+    frame[0] === 0xff && frame[1] === 0x0d && frame[12] === state));
+  emitState(fixture.notify, state);
+}
+
 test("subscribes before exact init, alternates complete polls, stops and reconnects cleanly", async (t) => {
   const f = fixture();
   t.after(() => f.connection.disconnect());
@@ -135,7 +152,8 @@ test("decodes offset DataViews, ignores invalid checksums and surfaces malformed
     Uint8Array.from([0xff, 14, ...body.slice(36), ...new Uint8Array(4)]),
   ];
   frames.forEach((frame) => emit(f.notify, frame));
-  assert.deepEqual(f.metrics, [{ watts: 100, distance: 42, resistance: 2 }]);
+  assert.deepEqual(f.metrics, [{ watts: 100, distance: 42, resistance: 2, sessionState: 0,
+    elapsed: 0, calories: 0, averageWatts: 0, paused: 0, caloriesPerHour: 499 }]);
   frames.at(-1)[15] ^= 1;
   frames.forEach((frame) => emit(f.notify, frame));
   assert.equal(f.metrics.length, 1);
@@ -190,4 +208,57 @@ test("reports unexpected disconnection and stops writes", async () => {
   assert.equal(f.errors.length, 1);
   assert.match(f.errors[0].message, /déconnecté/);
   assert.equal(f.events.at(-1), "disconnected");
+});
+
+test("confirms start, pause, resume and stop without overlapping poll writes", async (t) => {
+  const f = fixture();
+  t.after(() => f.connection.disconnect());
+  await f.connection.connect();
+  await assert.rejects(f.connection.control("toggle"), /indisponible/);
+  emitState(f.notify, 1);
+  for (const expected of [2, 3, 2]) {
+    const after = f.writes.length;
+    const command = f.connection.control("toggle");
+    await assert.rejects(f.connection.control("toggle"), /déjà en cours/);
+    await confirmCommand(f, expected, after);
+    await command;
+  }
+  const after = f.writes.length;
+  const stop = f.connection.control("stop");
+  await confirmCommand(f, 3, after);
+  await confirmCommand(f, 4, after);
+  await confirmCommand(f, 1, after);
+  await stop;
+  assert.deepEqual(f.errors, []);
+});
+
+test("stops a paused session without another pause and cancels on disconnect", async (t) => {
+  const f = fixture();
+  t.after(() => f.connection.disconnect());
+  await f.connection.connect();
+  emitState(f.notify, 3);
+  const after = f.writes.length;
+  const stop = f.connection.control("stop");
+  await confirmCommand(f, 4, after);
+  await confirmCommand(f, 1, after);
+  await stop;
+  assert.equal(f.writes.slice(after).filter((frame) => frame[0] === 0xff &&
+    frame[1] === 0x0d && frame[12] === 3).length, 0);
+  emitState(f.notify, 1);
+  const command = f.connection.control("toggle");
+  const rejected = assert.rejects(command, /Connexion annulée/);
+  await confirmCommand(f, 2, f.writes.length);
+  f.connection.disconnect();
+  await rejected;
+});
+
+test("does not continue stopping when pause is not confirmed", async (t) => {
+  const f = fixture();
+  t.after(() => f.connection.disconnect());
+  await f.connection.connect();
+  emitState(f.notify, 2);
+  const after = f.writes.length;
+  await assert.rejects(f.connection.control("stop"), /pas confirmé/);
+  const commands = f.writes.slice(after).filter((frame) => frame[0] === 0xff && frame[1] === 0x0d);
+  assert.deepEqual(commands.map((frame) => frame[12]), [3]);
 });

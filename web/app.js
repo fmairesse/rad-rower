@@ -9,6 +9,7 @@ if (!globalThis.Vue) {
     setup() {
       const state = ref("disconnected");
       const busy = ref(false);
+      const controlling = ref(false);
       const error = ref("");
       const warning = ref("");
       const journal = ref([]);
@@ -58,18 +59,24 @@ if (!globalThis.Vue) {
       const definitions = [
         ["watts", "Puissance", "W"],
         ["pace", "Allure / 500 m", "/ 500 m"],
+        ["averagePace", "Allure moyenne", "/ 500 m"],
         ["cadence", "Cadence", "coups/min"],
         ["distance", "Distance", "m"],
         ["strokes", "Nombre de coups", "coups"],
         ["speed", "Vitesse", "km/h"],
         ["resistance", "Résistance", "/ 24"],
+        ["elapsed", "Temps écoulé", ""],
+        ["paused", "Temps en pause", ""],
+        ["calories", "Calories", "kcal"],
+        ["caloriesPerHour", "Dépense estimée", "kcal/h"],
+        ["averageWatts", "Puissance moyenne", "W"],
       ];
       const number = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 2 });
       const cards = computed(() => definitions.map(([key, label, unit]) => {
         const value = metrics.value[key];
         const received = Boolean(updated.value[key]);
         let display = value == null ? "—" : typeof value === "number" ? number.format(value) : value;
-        if (key === "pace" && value != null) {
+        if (["pace", "averagePace", "elapsed", "paused"].includes(key) && value != null) {
           display = `${Math.floor(value / 60)}:${String(value % 60).padStart(2, "0")}`;
         }
         return {
@@ -77,6 +84,8 @@ if (!globalThis.Vue) {
           note: !received ? "En attente de données" : isStale(key) ? "Dernière valeur · non actualisée" :
             key === "resistance" && value == null ? "Niveau non transmis par le rameur" :
             key === "speed" ? "Calculée à partir de l’allure" :
+            key === "caloriesPerHour" ? "Estimation à partir de la puissance" :
+            ["paused", "averagePace", "averageWatts"].includes(key) ? "Interprétation probable, à confirmer" :
             value == null ? "Valeur indisponible" : "Donnée du rameur",
         };
       }));
@@ -112,6 +121,25 @@ if (!globalThis.Vue) {
       function disconnect() {
         connection.disconnect();
       }
+      const sessionState = computed(() => metrics.value.sessionState);
+      const sessionReady = computed(() => state.value === "streaming" &&
+        !controlling.value && Boolean(updated.value.sessionState) && !isStale("sessionState"));
+      const sessionLabel = computed(() => ({
+        1: "Au repos", 2: "En cours", 3: "En pause", 4: "Terminée",
+      }[sessionState.value] || "État indisponible"));
+      async function control(action) {
+        error.value = "";
+        controlling.value = true;
+        try {
+          await connection.control(action);
+          log(action === "stop" ? "Séance arrêtée." : "État de la séance confirmé.");
+        } catch (cause) {
+          error.value = `Commande de séance : ${cause.message || String(cause)}`;
+          log(error.value);
+        } finally {
+          controlling.value = false;
+        }
+      }
       const visibilityChanged = () => { hidden.value = document.hidden; };
       let ticker;
       onMounted(() => {
@@ -129,9 +157,9 @@ if (!globalThis.Vue) {
       return {
         state, stateLabel: computed(() => labels[state.value]), busy,
         supported, supportError, error, warning, journal, cards, hidden, freshnessLabel,
-        connect, disconnect,
+        sessionState, sessionReady, sessionLabel, controlling, control, connect, disconnect,
         connectionHint: computed(() => state.value === "streaming"
-          ? "I_RW · Lecture seule des métriques"
+          ? "I_RW · Métriques et séance"
           : state.value === "initializing" ? "Initialisation du protocole en cours…"
           : state.value === "connecting" ? "Sélection et connexion Bluetooth…"
           : "Allumez le rameur et libérez sa connexion Bluetooth."),

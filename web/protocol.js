@@ -49,6 +49,17 @@ export const POLL = [
   ),
 ];
 
+export const START = [
+  message("fe021703", "0012020402131413020c00000000000000000000", "ff0500800000b500000000000000000000000000"),
+  message("fe020d02", "ff0d020402091409020200100200330000000000"),
+];
+export const PAUSE = [message("fe020d02", "ff0d020402091409020200100300340000000000")];
+export const END = [message("fe020d02", "ff0d020402091409020200100400350000000000")];
+export const IDLE = [
+  message("fe021703", "0012020402131413020c00000000000000000000", "ff0500800100b600000000000000000000000000"),
+  message("fe020d02", "ff0d020402091409020200100100320000000000"),
+];
+
 const RESISTANCE_LEVELS = new Map([
   [0x01, 1], [0x03, 2], [0x04, 3], [0x06, 4], [0x07, 5], [0x08, 5],
   [0x09, 6], [0x0b, 7], [0x0c, 8], [0x0d, 8], [0x0e, 9], [0x10, 10],
@@ -58,6 +69,7 @@ const RESISTANCE_LEVELS = new Map([
 ]);
 
 const u16 = (bytes, offset) => bytes[offset] | (bytes[offset + 1] << 8);
+const u32 = (bytes, offset) => (u16(bytes, offset) + u16(bytes, offset + 2) * 65536);
 const startsWith = (bytes, prefix) => prefix.every((byte, i) => bytes[i] === byte);
 const paceFields = (pace) => ({ pace: pace || null, speed: pace ? 1800 / pace : 0 });
 
@@ -110,14 +122,24 @@ export function decodeMessage(body) {
   if (startsWith(body, [0x01, 0x04, 0x02]) &&
       [0x2e, 0x30, 0x31].includes(body[3]) && body.length === body[3] + 4) {
     if (body.slice(10, 18).every((byte) => byte === 0xff)) {
-      return { watts: null, distance: null, resistance: null };
+      return { watts: null, distance: null, resistance: null, sessionState: null,
+        elapsed: null, calories: null, averageWatts: null, paused: null, caloriesPerHour: null };
     }
-    return {
-      watts: u16(body, 10),
+    const watts = u16(body, 10);
+    const values = {
+      watts,
       distance: u16(body, 12),
       resistance: body[9] === 0 ? null :
         (RESISTANCE_LEVELS.get(body[9]) ?? `? 0x${body[9].toString(16).padStart(2, "0")}`),
     };
+    if (body[3] === 0x2e) {
+      Object.assign(values, {
+        sessionState: body[25], elapsed: u16(body, 21),
+        calories: u32(body, 34) / 100000, averageWatts: body[40], paused: body[45],
+        caloriesPerHour: watts ? Math.round(3.2438 * watts + 174.66) : null,
+      });
+    }
+    return values;
   }
   if (body.length === 33 && startsWith(body, [1, 4, 2, 0x1d, 0x14, 0x1d, 2, 2])) {
     return paceFields(u16(body, 27));
@@ -132,5 +154,6 @@ export function decodeMotionFrame(frame) {
     strokes: u16(frame, 10),
     cadence: frame[12],
     ...paceFields(u16(frame, 13)),
+    averagePace: u16(frame, 15) || null,
   };
 }

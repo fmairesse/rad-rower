@@ -1,5 +1,5 @@
 import {
-  SERVICE_UUID, WRITE_UUID, NOTIFY_UUID, SETUP, POLL,
+  SERVICE_UUID, WRITE_UUID, NOTIFY_UUID, SETUP, POLL, START, PAUSE, END, IDLE,
   MessageAssembler, decodeMessage, decodeMotionFrame,
 } from "./protocol.js";
 
@@ -46,6 +46,11 @@ export class RowerConnection {
       abort: new AbortController(),
       assembler: new MessageAssembler(),
       lastNotification: 0,
+      writes: Promise.resolve(),
+      stateVersion: 0,
+      stateAt: 0,
+      controlling: false,
+      ready: false,
     };
     this.session = session;
     this.onState("connecting");
@@ -85,6 +90,7 @@ export class RowerConnection {
         }
       }
       this.check(session);
+      session.ready = true;
       this.onState("streaming");
       void this.poll(session).catch((error) => this.fail(session, error));
     } catch (error) {
@@ -112,14 +118,62 @@ export class RowerConnection {
       return;
     }
     const metrics = decodeMessage(message.body);
-    if (metrics) this.onMetrics(metrics);
+    if (metrics) {
+      if (Object.hasOwn(metrics, "sessionState")) {
+        session.rowerState = metrics.sessionState;
+        session.stateAt = performance.now();
+        session.stateVersion += 1;
+      }
+      this.onMetrics(metrics);
+    }
   }
 
-  async send(session, frames) {
-    for (const frame of frames) {
+  send(session, frames) {
+    const operation = session.writes.then(async () => {
+      for (const frame of frames) {
+        this.check(session);
+        await session.write.writeValueWithResponse(frame);
+        this.check(session);
+      }
+    });
+    session.writes = operation.catch(() => {});
+    return operation;
+  }
+
+  async command(session, messages, expected, required = true) {
+    const version = session.stateVersion;
+    await this.send(session, messages.flat());
+    const deadline = performance.now() + 5000;
+    while (performance.now() < deadline) {
       this.check(session);
-      await session.write.writeValueWithResponse(frame);
-      this.check(session);
+      if (session.stateVersion > version && session.rowerState === expected) return;
+      await wait(100, session.abort.signal);
+    }
+    if (required) throw new Error("Le rameur n’a pas confirmé le changement d’état. Vérifiez sa console avant de réessayer.");
+  }
+
+  async control(action) {
+    const session = this.session;
+    if (!session || !session.ready || session.controlling ||
+        performance.now() - session.stateAt > 5000 || !session.stateAt) {
+      throw new Error("État du rameur indisponible ou commande déjà en cours.");
+    }
+    const state = session.rowerState;
+    if (action === "toggle" && ![1, 2, 3].includes(state) ||
+        action === "stop" && ![2, 3].includes(state) || !["toggle", "stop"].includes(action)) {
+      throw new Error("Cette commande n’est pas disponible dans l’état actuel du rameur.");
+    }
+    session.controlling = true;
+    try {
+      if (action === "toggle") {
+        await this.command(session, state === 2 ? PAUSE : START, state === 2 ? 3 : 2);
+      } else {
+        if (state === 2) await this.command(session, PAUSE, 3);
+        await this.command(session, END, 4, false);
+        await this.command(session, IDLE, 1);
+      }
+    } finally {
+      session.controlling = false;
     }
   }
 
