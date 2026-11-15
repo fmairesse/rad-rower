@@ -66,6 +66,7 @@
     </p>
     <p v-if="error" class="notice error" role="alert">{{ error }}</p>
     <p v-if="warning" class="notice" role="status">{{ warning }}</p>
+    <p v-if="wakeLockWarning" class="notice" role="status">{{ wakeLockWarning }}</p>
     <p v-if="hidden && state !== 'disconnected'" class="notice" role="status">
       Keep this tab visible and the screen awake: sleep mode may interrupt communication.
     </p>

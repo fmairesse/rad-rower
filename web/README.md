@@ -48,8 +48,14 @@ forwarding setup exposing the server as localhost.
 5. Click **Disconnect** to stop polling and close the GATT connection. This
   does not send a stop command.
 
-Keep the tab visible and the screen awake. Browser timer throttling or system
-sleep can break the rower's approximately ten-second keep-alive watchdog.
+During a running session, the app requests a screen wake lock to keep the
+display on. It releases the lock on pause, session end or disconnection and
+requests it again on resume or when the page becomes visible. The browser or
+operating system can refuse or release the lock; a notice advises keeping the
+screen awake manually when this happens. Keep the tab visible: a wake lock
+cannot prevent background timer throttling or guarantee uninterrupted BLE.
+Browser timer throttling or system sleep can break the rower's approximately
+ten-second keep-alive watchdog.
 Reconnection is manual; the page never reconnects or selects a device silently.
 
 ## Metrics and protocol
@@ -101,15 +107,16 @@ unknown fields, and hardware validation history.
 With an existing Node.js **22.7+** installation (optional, tests only):
 
 ```sh
-node --experimental-default-type=module --test web/protocol.test.js web/rower.test.js
+node --experimental-default-type=module --test web/protocol.test.js web/rower.test.js web/wake-lock.test.js
 ```
 
 Run this command from the repository root. Tests use Node's built-in runner,
 with no package manifest or dependencies. They compare every setup/poll byte
   against the Python reference, exercise framing and metric edge cases, and use
   a fake GATT connection to check ordering, polling, session transitions,
-  confirmation failures, cancellation, disconnect and reconnect. They never
-  access Bluetooth hardware.
+  confirmation failures, cancellation, disconnect and reconnect. Wake lock
+  tests simulate session, visibility and browser lock events. They never access
+  Bluetooth hardware or control the physical display.
 
 Browser UI checks and automated mocks cannot certify the real BLE link.
 **The web implementation still needs a hardware trial**: confirm connection

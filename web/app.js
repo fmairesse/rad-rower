@@ -1,4 +1,5 @@
 import { RowerConnection } from "./rower.js";
+import { SessionWakeLock } from "./wake-lock.js";
 
 if (globalThis.isSecureContext && "serviceWorker" in navigator) {
   navigator.serviceWorker.register("./service-worker.js").catch((error) => {
@@ -18,6 +19,7 @@ if (!globalThis.Vue) {
       const controlling = ref(false);
       const error = ref("");
       const warning = ref("");
+      const wakeLockWarning = ref("");
       const journal = ref([]);
       const metrics = ref({});
       const updated = ref({});
@@ -40,15 +42,20 @@ if (!globalThis.Vue) {
         journal.value.unshift({ time: new Date().toLocaleTimeString("en-US"), text });
         journal.value = journal.value.slice(0, 40);
       };
+      const wakeLock = new SessionWakeLock(navigator.wakeLock, (message) => {
+        wakeLockWarning.value = message;
+      });
       const connection = new RowerConnection({
         bluetooth: navigator.bluetooth,
         onState(value) {
           state.value = value;
+          wakeLock.setActive(value === "streaming" && metrics.value.sessionState === 2);
           log(labels[value]);
         },
         onMetrics(values) {
           const timestamp = Date.now();
           metrics.value = { ...metrics.value, ...values };
+          wakeLock.setActive(state.value === "streaming" && metrics.value.sessionState === 2);
           for (const key of Object.keys(values)) updated.value[key] = timestamp;
           now.value = timestamp;
         },
@@ -149,7 +156,10 @@ if (!globalThis.Vue) {
           controlling.value = false;
         }
       }
-      const visibilityChanged = () => { hidden.value = document.hidden; };
+      const visibilityChanged = () => {
+        hidden.value = document.hidden;
+        wakeLock.setVisible(!document.hidden);
+      };
       const beforeInstall = (event) => {
         event.preventDefault();
         installPrompt.value = event;
@@ -171,6 +181,7 @@ if (!globalThis.Vue) {
       let ticker;
       onMounted(() => {
         document.querySelector("#startup").remove();
+        wakeLock.setVisible(!document.hidden);
         ticker = setInterval(() => { now.value = Date.now(); }, 1000);
         document.addEventListener("visibilitychange", visibilityChanged);
         globalThis.addEventListener("pagehide", disconnect);
@@ -183,12 +194,13 @@ if (!globalThis.Vue) {
         globalThis.removeEventListener("pagehide", disconnect);
         globalThis.removeEventListener("beforeinstallprompt", beforeInstall);
         globalThis.removeEventListener("appinstalled", appInstalled);
+        wakeLock.setActive(false);
         disconnect();
       });
       return {
         state, stateLabel: computed(() => labels[state.value]), busy,
         canInstall: computed(() => Boolean(installPrompt.value) && !installed.value), installApp,
-        supported, supportError, error, warning, journal, cards, hidden, freshnessLabel,
+        supported, supportError, error, warning, wakeLockWarning, journal, cards, hidden, freshnessLabel,
         sessionState, sessionReady, sessionLabel, controlling, control, connect, disconnect,
         connectionHint: computed(() => state.value === "streaming"
           ? "I_RW · Metrics and session"

@@ -26,12 +26,14 @@ le 2026-11-14 après un essai réel : puissance (W), distance (m), résistance
 
 `web/` propose un tableau de bord Vue 3 (CDN, sans projet Node.js), installable
 comme PWA avec cache du shell hors ligne après une première visite en ligne.
-Le service worker met en cache Vue depuis le CDN au mieux; Bluetooth exige
-toujours un navigateur compatible et HTTPS/localhost.
-avec Web Bluetooth : même init et poll, toutes les métriques décodées par
+Le service worker met en cache Vue depuis le CDN au mieux ; Bluetooth exige
+toujours un navigateur compatible et HTTPS/localhost. L'application utilise
+Web Bluetooth : même init et poll, toutes les métriques décodées par
 `03-telemetry.py`, commandes start/pause/reprise/arrêt, déconnexion manuelle
 et signalement des valeurs non actualisées. Les tests JavaScript comparent les
 écritures à `bleak/rower.py` et simulent les transitions de séance en GATT.
+Un verrou d'écran est demandé pendant une séance active, avec libération en
+pause ou à la déconnexion ; les transitions sont testées avec des simulations.
 L’affichage a été vérifié dans un navigateur avec des notifications simulées,
 y compris l’absence de Web Bluetooth, l’échec du CDN et les valeurs périmées.
 **La connexion web au vrai rameur n’a pas encore été testée.**
