@@ -70,8 +70,18 @@ notes de protocole.
 
 - `web/sessions.js` enregistre les séances et les échantillons horodatés dans
   IndexedDB, avec `synced: false`, pauses/reprises, fin et interruption.
-  `web/sessions.test.js` couvre le cycle et les erreurs de stockage ; les 22
-  tests web passent. Le stockage réel du navigateur reste à vérifier.
+  `web/sessions.test.js` couvre le cycle et les erreurs de stockage. IndexedDB,
+  la persistance après rechargement et `synced` ont été vérifiés dans le navigateur
+  avec des données et réponses Google simulées.
+- `web/google-health.js` exporte les séances achevées vers Google Health v4 :
+  totaux, durée active, pauses/reprises et statistiques supplémentaires en notes.
+  Connexion optionnelle Google Identity Services ; jeton en mémoire, renouvelé
+  par clic après expiration, sans secret ni refresh token côté navigateur.
+  Les séries brutes restent locales (écriture non prise en charge par Google).
+  **Consentement et envoi réel non validés** ; configurer les origines JavaScript
+  OAuth et révoquer les secrets exposés dans les fichiers locaux. Sources,
+  prérequis et limites : `web/README.md`, tests : `web/google-health.test.js`.
+  Les 30 tests JavaScript web passent.
 
 - Environnement : adaptateur Bluetooth et `bluetoothctl` 5.72 disponibles ;
   Bleak fonctionne (`poetry` dans `bleak/`) ; le rameur s’annonce `I_RW`.

@@ -1,10 +1,11 @@
-const CACHE_NAME = "radrower-shell-v3";
+const CACHE_NAME = "radrower-shell-v4";
 const APP_SHELL = [
   "./index.html",
   "./styles.css",
   "./app.js",
   "./wake-lock.js",
   "./sessions.js",
+  "./google-health.js",
   "./rower.js",
   "./protocol.js",
   "./manifest.webmanifest",
@@ -42,6 +43,9 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return;
 
   const url = new URL(request.url);
+  if (url.origin === self.location.origin &&
+      !request.mode.includes("navigate") && !APP_SHELL.some((path) =>
+        new URL(path, self.registration.scope).pathname === url.pathname)) return;
   if (url.origin !== self.location.origin && request.url !== VUE_SCRIPT) return;
 
   event.respondWith((async () => {

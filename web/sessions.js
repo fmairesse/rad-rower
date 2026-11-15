@@ -44,6 +44,17 @@ export class SessionStore {
     });
   }
 
+  update(id, changes) {
+    return this.transaction(["sessions"], "readwrite", (transaction) => {
+      const store = transaction.objectStore("sessions");
+      const request = store.get(id);
+      request.onsuccess = () => {
+        if (!request.result) return transaction.abort();
+        store.put({ ...request.result, ...changes });
+      };
+    });
+  }
+
   samples(id) {
     return this.transaction(["samples"], "readonly", (transaction) => {
       const request = transaction.objectStore("samples").index("sessionId").getAll(id);
@@ -79,19 +90,21 @@ export class SessionRecorder {
         id: this.makeId(), startedAt: timestamp, endedAt: null,
         status: "recording", synced: false, sampleCount: 0, metrics: {},
         partial: values.sessionState === 3 || Number(values.elapsed) > 2,
+        startUtcOffset: `${-new Date(timestamp).getTimezoneOffset() * 60}s`,
       };
     }
     if (!this.current) return;
     const metrics = Object.fromEntries(Object.entries(values)
       .filter(([, value]) => value === null || typeof value === "number" || typeof value === "string"));
     const finishing = [1, 4, 10].includes(values.sessionState);
-    if (!finishing) {
+    if (values.sessionState !== 1) {
       for (const [key, value] of Object.entries(metrics)) {
         if (value !== null) this.current.metrics[key] = value;
       }
     }
     const sample = {
       sessionId: this.current.id, sequence: this.current.sampleCount++, timestamp, metrics,
+      utcOffset: `${-new Date(timestamp).getTimezoneOffset() * 60}s`,
     };
     this.persist(sample);
     if (finishing) this.finish("completed", timestamp);
@@ -101,6 +114,7 @@ export class SessionRecorder {
     if (!this.current) return this.pending;
     this.current.status = status;
     this.current.endedAt = timestamp;
+    this.current.endUtcOffset = `${-new Date(timestamp).getTimezoneOffset() * 60}s`;
     this.persist();
     this.current = null;
     return this.pending;

@@ -67,3 +67,13 @@ test("storage failure is surfaced and later writes can retry", async () => {
   await recorder.finish();
   assert.equal([...sessions.values()][0].status, "completed");
 });
+
+test("the final end-state frame contributes its latest totals", async () => {
+  const { recorder, sessions } = fixture();
+  recorder.record({ sessionState: 2, distance: 100 });
+  recorder.record({ sessionState: 4, distance: 105, calories: 12 });
+  recorder.record({ sessionState: 1, distance: 0 });
+  await recorder.pending;
+  assert.equal([...sessions.values()][0].metrics.distance, 105);
+  assert.equal([...sessions.values()][0].metrics.calories, 12);
+});

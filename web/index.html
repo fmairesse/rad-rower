@@ -10,6 +10,7 @@
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./styles.css">
   <script defer src="https://cdn.jsdelivr.net/npm/vue@3.5.13/dist/vue.global.prod.js"></script>
+  <script async src="https://accounts.google.com/gsi/client"></script>
   <script type="module" src="./app.js"></script>
 </head>
 <body>
@@ -86,6 +87,21 @@
       <h2>Workouts</h2>
       <p role="status">{{ savedSessions.length }} saved on this device</p>
     </section>
+
+    <section class="session health" aria-label="Google Health">
+      <div>
+        <h2>Google Health</h2>
+        <p role="status">{{ healthConnected ? 'Connected' : healthEnabled ? 'Authorization expired' : 'Not connected' }}
+          · {{ pendingWorkouts }} workouts awaiting sync</p>
+      </div>
+      <div class="actions">
+        <button :disabled="healthBusy" @click="syncHealth">
+          {{ healthBusy ? 'Syncing…' : healthConnected ? 'Sync workouts' : 'Connect Google Health' }}
+        </button>
+        <button v-if="healthEnabled" class="secondary" @click="disconnectHealth">Disconnect Google Health</button>
+      </div>
+    </section>
+    <p v-if="healthError" class="notice error" role="alert">{{ healthError }}</p>
 
     <section class="help">
       <h2>Connection and compatibility</h2>

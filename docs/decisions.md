@@ -50,3 +50,20 @@ conversation. Si un choix change, indiquer quelle décision le remplace.
   not treated as completed. `synced` stays false until remote storage succeeds.
 - Limits: one active tab, origin-local storage, possible browser eviction and
   pending-write loss on abrupt closure. No device identifiers are retained.
+
+## D005 - Use optional Google browser authorization without a backend
+
+- Date: 2026-11-15.
+- Status: adopted; real consent and upload still require validation.
+- Decision: use Google Identity Services' token model and the Google Health v4
+  `exercise` endpoint. Request only the activity-and-fitness write scope.
+- Reason: the app is statically hosted; a web client secret or long-lived refresh
+  token must not be embedded in public JavaScript. Access tokens remain in memory,
+  with user-triggered renewal after expiry. No backend is needed for this model.
+- Export: workout summaries and pause/resume events, extra rowing metrics in
+  notes. Raw telemetry is kept locally because Google's intraday write endpoints
+  are not supported. No walking steps or unmeasured health metrics are invented.
+- Confirmation: mark `synced` only after remote completion/readback; reuse the
+  documented client-provided ID to reconcile ambiguous writes and conflicts.
+- Sources: [workouts](https://developers.google.com/health/data-types/workouts),
+  [browser token model](https://developers.google.com/identity/oauth2/web/guides/use-token-model).

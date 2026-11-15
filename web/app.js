@@ -1,6 +1,7 @@
 import { RowerConnection } from "./rower.js";
 import { SessionWakeLock } from "./wake-lock.js";
 import { SessionStore, SessionRecorder } from "./sessions.js";
+import { GoogleHealth } from "./google-health.js";
 
 if (globalThis.isSecureContext && "serviceWorker" in navigator) {
   navigator.serviceWorker.register("./service-worker.js").catch((error) => {
@@ -24,9 +25,20 @@ if (!globalThis.Vue) {
       const storageWarning = ref("");
       const savedSessions = ref([]);
       const store = new SessionStore();
+      const health = new GoogleHealth(store);
+      const healthEnabled = ref(false);
+      const healthBusy = ref(false);
+      const healthError = ref("");
+      const healthConnected = computed(() => {
+        now.value;
+        return healthEnabled.value && health.connected;
+      });
       const refreshSessions = async () => { savedSessions.value = await store.list(); };
       const recorder = new SessionRecorder(store, {
-        onChange: refreshSessions,
+        async onChange(session) {
+          await refreshSessions();
+          if (session.status === "completed" && health.connected) syncHealth();
+        },
         onError: (cause) => { storageWarning.value = `Workout storage: ${cause.message}`; },
       });
       const storageReady = recorder.recover().then(refreshSessions).catch((cause) => {
@@ -172,6 +184,32 @@ if (!globalThis.Vue) {
           controlling.value = false;
         }
       }
+      async function syncHealth() {
+        if (healthBusy.value) return;
+        healthBusy.value = true;
+        healthError.value = "";
+        try {
+          if (!health.connected) {
+            await health.connect();
+            healthEnabled.value = true;
+          }
+          await storageReady;
+          await health.sync();
+        } catch (cause) {
+          healthError.value = cause.message || String(cause);
+        } finally {
+          now.value = Date.now();
+          healthBusy.value = false;
+          await refreshSessions().catch((cause) => {
+            storageWarning.value = `Workout storage: ${cause.message}`;
+          });
+        }
+      }
+      function disconnectHealth() {
+        health.disconnect();
+        healthEnabled.value = false;
+        healthError.value = "";
+      }
       const visibilityChanged = () => {
         hidden.value = document.hidden;
         wakeLock.setVisible(!document.hidden);
@@ -211,12 +249,16 @@ if (!globalThis.Vue) {
         globalThis.removeEventListener("beforeinstallprompt", beforeInstall);
         globalThis.removeEventListener("appinstalled", appInstalled);
         wakeLock.setActive(false);
+        disconnectHealth();
         disconnect();
       });
       return {
         state, stateLabel: computed(() => labels[state.value]), busy,
         canInstall: computed(() => Boolean(installPrompt.value) && !installed.value), installApp,
         supported, supportError, error, warning, wakeLockWarning, storageWarning, savedSessions,
+        healthConnected, healthEnabled, healthBusy, healthError, syncHealth, disconnectHealth,
+        pendingWorkouts: computed(() => savedSessions.value.filter((session) =>
+          session.status === "completed" && !session.synced).length),
         journal, cards, hidden, freshnessLabel,
         sessionState, sessionReady, sessionLabel, controlling, control, connect, disconnect,
         connectionHint: computed(() => state.value === "streaming"

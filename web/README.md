@@ -95,9 +95,10 @@ reconstruct cumulative distance or calories from earlier readings.
   Disconnection preserves but dims the last readings; a new connection clears
   them. These are rower counters, not browser-session totals; rollover is not
   corrected.
-- The connection journal is capped at 40 entries, kept in memory, and does
-  not log device identifiers or send metrics to a server. Vue is the only
-  CDN script; loading it contacts jsDelivr.
+- The connection journal is capped at 40 entries and kept in memory without
+  device identifiers. Workouts are stored locally. They are sent to Google
+  only after optional Google Health authorization. Vue loads from jsDelivr;
+  the Google Identity Services library loads from accounts.google.com.
 
 See the [protocol notes](../docs/protocole-ble.md) for observed offsets,
 unknown fields, and hardware validation history.
@@ -121,6 +122,76 @@ samples. Use only one Radrower tab at a time. Storage errors are shown in the UI
 browser eviction, private browsing or clearing site data can delete history.
 Storage is not a backup and is not shared across devices or hosting origins.
 
+## Optional Google Health sync
+
+**Connect Google Health** opens Google's consent popup and syncs completed,
+unsynced workouts. While authorization remains valid, new completed workouts
+are synced automatically. **Sync workouts** retries failed uploads.
+Interrupted workouts are never uploaded. Bluetooth recording works without
+Google, and a Google error never deletes a local workout.
+
+The browser uses Google Identity Services' official token model, requesting
+only `https://www.googleapis.com/auth/googlehealth.activity_and_fitness.writeonly`.
+Access tokens stay in tab memory and are discarded on reload or disconnect.
+When authorization expires, the button obtains a new token through a user
+gesture. This static application does not need or store refresh tokens or a
+client secret. Unattended synchronization across browser sessions would require
+a separate backend with secure OAuth authorization-code/refresh-token handling.
+Disconnect stops future uploads and clears the token, but does not delete Google
+workouts or revoke Google's saved consent; manage consent in your Google account.
+An upload already sent before disconnect may still complete remotely.
+
+### Google Cloud setup
+
+1. Enable the Google Health API and configure its developer access and OAuth
+  consent screen for the Google Cloud project. Add test users while the OAuth
+  application is in testing; public access can require Google's verification.
+2. Use a **Web application** OAuth client. `google-health.js` contains only the
+  public client ID supplied for this project, never the client secret.
+3. Add exact **Authorized JavaScript origins** in Google Cloud, for example
+  `https://fmairesse.github.io` and `http://127.0.0.1:8082` (or your development
+  origin). Origins have no path. Authorized redirect URIs alone are not enough
+  for the popup token model. Allow popups and access to accounts.google.com.
+4. Test consent and an upload with your own Google Health account. No real
+  authenticated upload has been validated yet; tests use simulated responses.
+
+**Security:** revoke/rotate any OAuth secrets or authorization codes exposed in
+local codelab files. These local files are ignored by Git and are not cached by
+the service worker. Do not deploy them with a manual directory upload: a static
+HTTP server can still serve untracked files from its document root.
+
+### Exported data and confirmation
+
+The verified endpoint is
+`POST https://health.googleapis.com/v4/users/me/dataTypes/exercise/dataPoints`.
+The payload identifies `ROWING_MACHINE` and the ProForm Sport RL, with start/end
+times, timezone offsets, active duration, pause/resume events, distance (converted
+from meters to millimeters), calories, and calculated average speed/pace for
+complete recordings. Stroke counts are not exported as walking steps. Additional
+rower metrics (power, cadence, strokes, resistance and others) and sampled
+min/max/means are included in the exercise's free-form `notes`, with units and
+provisional interpretation warnings. Sample means are not time-weighted.
+Recordings joined in progress are marked partial in notes; their counters can
+include activity before the first recorded sample and averages are omitted.
+
+Google's intraday telemetry streams are read-only: the REST write API cannot
+import the raw power/cadence/distance time series. All samples remain in IndexedDB
+for future local charts. No heart rate, GPS, steps or elevation are fabricated.
+
+The session UUID is used as the documented client-provided data point name.
+Before uploading, readback checks for an existing exercise. A successful HTTP
+response alone is not enough: `synced` becomes true only after a completed
+operation or readback confirms matching start/end times. The Google resource
+name and sync timestamp are retained. Network failures can be retried with the
+same resource ID; conflicts trigger readback rather than a new exercise ID.
+Pending asynchronous operations remain unsynced until a later readback finds the
+exercise. This service's client-provided ID behavior still needs a real trial.
+
+References: [Google Health workouts](https://developers.google.com/health/data-types/workouts),
+[create data point](https://developers.google.com/health/reference/rest/v4/users.dataTypes.dataPoints/create),
+[data point schema](https://developers.google.com/health/reference/rest/v4/users.dataTypes.dataPoints),
+[Google browser token model](https://developers.google.com/identity/oauth2/web/guides/use-token-model).
+
 ## Tests
 
 With an existing Node.js **22.7+** installation (optional, tests only):
@@ -136,6 +207,9 @@ with no package manifest or dependencies. They compare every setup/poll byte
   confirmation failures, cancellation, disconnect and reconnect. Wake lock
   tests simulate session, visibility and browser lock events. They never access
   Bluetooth hardware or control the physical display.
+  Storage and Google Health tests cover metric recording, final totals, recovery,
+  payload units, consent failures, expiration, uncertain writes and conflict
+  readback. The current suite contains 30 passing tests.
 
 Browser UI checks and automated mocks cannot certify the real BLE link.
 **The web implementation still needs a hardware trial**: confirm connection
