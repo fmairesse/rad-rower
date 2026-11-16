@@ -22,6 +22,9 @@ Workouts and timestamped samples are now stored locally in Room/SQLite, with
 interrupted-workout recovery and storage errors displayed in the dashboard.
 The dashboard links to a separate workout history listing all saved sessions
 with start date/time, rower-reported elapsed time, distance, calories and status.
+The Android screen-on flag follows the last reported active session state
+while streaming, and is cleared on pause, stop or disconnection. Stale readings
+do not release it before the connection is lost or another state arrives.
 The persistence and UI tests pass with simulated data on an Android 16
 emulator; the recording has not yet been tested on the real rower. Health
 Connect export remains to be implemented. See `android/README.md` for

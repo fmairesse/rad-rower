@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.SystemClock
 import android.provider.Settings
+import android.view.Window
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -38,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import io.radrower.ui.theme.RadRowerTheme
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
@@ -66,13 +68,7 @@ class MainActivity : ComponentActivity() {
         rower = RowerConnection(applicationContext, lifecycleScope, recorder::record, recorder::disconnect)
         enableEdgeToEdge()
         lifecycleScope.launch {
-            rower.state.collect {
-                if (it.connection == ConnectionState.STREAMING) {
-                    window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                } else {
-                    window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                }
-            }
+            keepScreenOnWhileActive(window, rower.state)
         }
         setContent {
             val state by rower.state.collectAsState()
@@ -144,6 +140,16 @@ class MainActivity : ComponentActivity() {
         } else {
             permissionRequested = true
             permissions.launch(bluetoothPermissions())
+        }
+    }
+}
+
+internal suspend fun keepScreenOnWhileActive(window: Window, states: Flow<RowerUiState>) {
+    states.collect { state ->
+        if (state.connection == ConnectionState.STREAMING && state.readings["sessionState"]?.value == 2) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
     }
 }

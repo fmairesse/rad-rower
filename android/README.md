@@ -11,13 +11,17 @@ On Android 12 and newer, grant the nearby-devices permissions. On Android 11
 and earlier, Bluetooth scanning requires location permission and may require
 location services to be enabled. Bluetooth itself must also be enabled.
 
-Keep the app in the foreground: the screen stays awake while connected, and
-leaving the app disconnects the rower. The app attempts to reconnect when
-returned to the foreground. Session buttons are disabled until a recent rower
-state is available. Start, pause, resume and stop send commands only when
-pressed; they wait for the corresponding state reported by the rower. If a
-command fails or is not confirmed, check the rower's console before retrying.
-Metrics older than five seconds are marked as out of date.
+Keep the app in the foreground: the screen stays awake while the connected
+rower reports an active session. It can turn off normally when the session is
+paused or stopped, or when the rower disconnects. The last reported session
+state is used until a new state arrives or the connection is lost, even if the
+reading is out of date. Leaving the app disconnects the rower, and the app
+attempts to reconnect when returned to the foreground. Session buttons are
+disabled until a recent rower state is available. Start, pause, resume and stop
+send commands only when pressed; they wait for the corresponding state
+reported by the rower. If a command fails or is not confirmed, check the
+rower's console before retrying. Metrics older than five seconds are marked as
+out of date.
 
 The protocol is based on the verified Linux experiments documented in
 [`docs/protocole-ble.md`](../docs/protocole-ble.md) and the web implementation.
