@@ -41,8 +41,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
-import java.text.DateFormat
-import java.util.Date
 
 class MainActivity : ComponentActivity() {
     private lateinit var rower: RowerConnection
@@ -79,7 +77,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val state by rower.state.collectAsState()
             val storageError by recorder.error.collectAsState()
-            var workouts by remember { mutableStateOf<List<Workout>>(emptyList()) }
+            var workouts by remember { mutableStateOf<List<Workout>?>(null) }
             var readError by remember { mutableStateOf<String?>(null) }
             LaunchedEffect(app) {
                 app.database.workouts().observeWorkouts()
@@ -87,7 +85,7 @@ class MainActivity : ComponentActivity() {
                     .collect { workouts = it }
             }
             RadRowerTheme {
-                RowerScreen(
+                RadrowerScreens(
                     state = state,
                     permissionGranted = permissionGranted,
                     bluetoothEnabled = bluetoothEnabled,
@@ -179,8 +177,9 @@ internal fun RowerScreen(
     onRetry: () -> Unit,
     onToggle: () -> Unit,
     onStop: () -> Unit,
-    workouts: List<Workout> = emptyList(),
+    workouts: List<Workout>? = emptyList(),
     storageError: String? = null,
+    onHistory: () -> Unit = {},
 ) {
     var now by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
     LaunchedEffect(Unit) {
@@ -247,14 +246,9 @@ internal fun RowerScreen(
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("Workouts", style = MaterialTheme.typography.titleLarge)
                     storageError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                    Text("${workouts.size} saved on this device")
-                    workouts.take(5).forEach { workout ->
-                        val date = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
-                            .format(Date(workout.startedAt))
-                        val distance = workout.distance?.let { " · ${formatMetric("distance", it)} m" } ?: ""
-                        val partial = if (workout.partial) " · partial" else ""
-                        Text("$date · ${workout.status}$partial$distance")
-                    }
+                    if (workouts != null) Text("${workouts.size} saved on this device")
+                    else if (storageError == null) Text("Loading workouts…")
+                    OutlinedButton(onClick = onHistory) { Text("View workout history") }
                 }
             }
             Text("Live metrics", style = MaterialTheme.typography.titleLarge)

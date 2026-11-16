@@ -28,8 +28,11 @@ selected, so avoid running the app near multiple machines with that name.
 Workouts are saved on this device in a Room/SQLite database. Recording begins
 when the rower reports an active or paused session. Metric updates and session
 states are saved as timestamped samples; the summary keeps the highest
-cumulative counters when the rower resets them at the end. The five most recent
-workouts and the total count appear on the dashboard.
+cumulative counters when the rower resets them at the end. Open **View workout
+history** on the dashboard to see all workouts, newest first, with their start
+date and time, duration, distance and calories. Duration is the elapsed time
+reported by the rower; unavailable values are shown as a dash. Recording,
+interrupted and partial workouts remain visible with their status.
 
 An active workout is marked **interrupted** when the connection is lost or the
 app leaves the foreground. After an unexpected process termination, unfinished
