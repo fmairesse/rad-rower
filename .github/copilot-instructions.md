@@ -31,4 +31,5 @@ Linux avec Python et Bleak.
 - Referencer les scripts, tests ou sources qui justifient les conclusions.
 - Ne pas versionner de secrets ou d'identifiants personnels du materiel.
 - Ne pas créer de commit ou de branche sans demande explicite.
-- Quand demandé de commit, écrire le message en anglais, à la façon "conventional commit", en incluant le co-auteur copilot. Respecte la règle 50-72 caractères.
+- Quand demandé de commit, écrire le message en anglais, à la façon "conventional commit", en incluant le co-auteur copilot. Respecter la règle 50-72 caractères. Préférer la concision de l’entête
+à l’exactitude grammaticale.

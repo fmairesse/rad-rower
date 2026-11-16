@@ -18,8 +18,12 @@ waits for confirmations. Unit tests cover protocol frames and command sequencing
 simulated Compose UI tests pass on an Android 16 emulator. On 2026-11-16 the
 user reported that the Android application worked perfectly in a test; the
 phone and exact test conditions were not specified.
-Workout storage and Health Connect export remain to be implemented. See
-`android/README.md` for operation and limitations.
+Workouts and timestamped samples are now stored locally in Room/SQLite, with
+interrupted-workout recovery and storage errors displayed in the dashboard.
+The persistence and UI tests pass with simulated data on an Android 16
+emulator; the recording has not yet been tested on the real rower. Health
+Connect export remains to be implemented. See `android/README.md` for
+operation and limitations.
 
 `bleak/02-connection.py` maintient la connexion avec le rameur (validé par
 l’utilisateur le 2026-11-14) : initialisation de 25 écritures puis poll

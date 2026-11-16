@@ -25,8 +25,21 @@ On 2026-11-16 the user reported a successful test of the Android app; the phone
 and exact test conditions were not specified. The first matching `I_RW` is
 selected, so avoid running the app near multiple machines with that name.
 
-Workout recording and Health Connect export are not implemented yet; closing
-the app does not save a session.
+Workouts are saved on this device in a Room/SQLite database. Recording begins
+when the rower reports an active or paused session. Metric updates and session
+states are saved as timestamped samples; the summary keeps the highest
+cumulative counters when the rower resets them at the end. The five most recent
+workouts and the total count appear on the dashboard.
+
+An active workout is marked **interrupted** when the connection is lost or the
+app leaves the foreground. After an unexpected process termination, unfinished
+workouts are marked interrupted on the next launch using their last saved
+sample time. A workout first observed after it started is marked **partial**.
+No measurements are inferred for missing intervals; a sudden shutdown may lose
+pending writes. Storage errors are displayed on the dashboard. Android's
+configured app backup behavior also applies to the database.
+
+Health Connect export is not implemented yet.
 
 Build and run unit tests from the repository root:
 

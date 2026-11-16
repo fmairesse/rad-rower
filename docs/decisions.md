@@ -89,3 +89,18 @@ conversation. Si un choix change, indiquer quelle décision le remplace.
   an authenticated trial. Idempotency relies on Intervals.icu activity listing
   returning the external ID consistently.
 - Source: [Intervals.icu API documentation](https://intervals.icu/api-docs.html).
+
+## D007 - Store Android workouts locally with Room
+
+- Date: 2026-11-16.
+- Status: implemented; real-rower recording not yet tested.
+- Decision: store workout summaries and timestamped metric updates in separate
+  SQLite tables using Room. Save each update and its summary transactionally.
+- Reason: preserve recordings independently of Health Connect availability or
+  permissions, and retain rowing metrics for later analysis and export.
+- Consequence: mark disconnected or recovered unfinished recordings as
+  interrupted; mark recordings first observed in progress as partial. No Health
+  Connect export is implemented yet.
+- Limits: pending writes may be lost on abrupt termination; Android app backup
+  settings apply. The app does not store Bluetooth device identifiers.
+- Tests: `android/app/src/androidTest/java/io/radrower/WorkoutPersistenceTest.kt`.

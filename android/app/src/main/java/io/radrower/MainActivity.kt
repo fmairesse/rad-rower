@@ -38,8 +38,11 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import io.radrower.ui.theme.RadRowerTheme
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
+import java.text.DateFormat
+import java.util.Date
 
 class MainActivity : ComponentActivity() {
     private lateinit var rower: RowerConnection
@@ -60,7 +63,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         permissionRequested = savedInstanceState?.getBoolean("permissionRequested") ?: false
-        rower = RowerConnection(applicationContext, lifecycleScope)
+        val app = application as RadrowerApplication
+        val recorder = app.recorder
+        rower = RowerConnection(applicationContext, lifecycleScope, recorder::record, recorder::disconnect)
         enableEdgeToEdge()
         lifecycleScope.launch {
             rower.state.collect {
@@ -73,6 +78,14 @@ class MainActivity : ComponentActivity() {
         }
         setContent {
             val state by rower.state.collectAsState()
+            val storageError by recorder.error.collectAsState()
+            var workouts by remember { mutableStateOf<List<Workout>>(emptyList()) }
+            var readError by remember { mutableStateOf<String?>(null) }
+            LaunchedEffect(app) {
+                app.database.workouts().observeWorkouts()
+                    .catch { readError = "Unable to read workouts: ${it.message ?: "database error"}" }
+                    .collect { workouts = it }
+            }
             RadRowerTheme {
                 RowerScreen(
                     state = state,
@@ -87,6 +100,8 @@ class MainActivity : ComponentActivity() {
                     },
                     onToggle = { rower.control(false) },
                     onStop = { rower.control(true) },
+                    workouts = workouts,
+                    storageError = storageError ?: readError,
                 )
             }
         }
@@ -164,6 +179,8 @@ internal fun RowerScreen(
     onRetry: () -> Unit,
     onToggle: () -> Unit,
     onStop: () -> Unit,
+    workouts: List<Workout> = emptyList(),
+    storageError: String? = null,
 ) {
     var now by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
     LaunchedEffect(Unit) {
@@ -224,6 +241,20 @@ internal fun RowerScreen(
                         }
                     }
                     if (state.controlling) Text("Waiting for the rower to confirm…")
+                }
+            }
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Workouts", style = MaterialTheme.typography.titleLarge)
+                    storageError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                    Text("${workouts.size} saved on this device")
+                    workouts.take(5).forEach { workout ->
+                        val date = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
+                            .format(Date(workout.startedAt))
+                        val distance = workout.distance?.let { " · ${formatMetric("distance", it)} m" } ?: ""
+                        val partial = if (workout.partial) " · partial" else ""
+                        Text("$date · ${workout.status}$partial$distance")
+                    }
                 }
             }
             Text("Live metrics", style = MaterialTheme.typography.titleLarge)

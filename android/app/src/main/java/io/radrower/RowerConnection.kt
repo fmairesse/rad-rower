@@ -64,7 +64,12 @@ internal fun hasBluetoothPermissions(context: Context): Boolean =
     }
 
 @SuppressLint("MissingPermission")
-internal class RowerConnection(private val context: Context, private val scope: CoroutineScope) {
+internal class RowerConnection(
+    private val context: Context,
+    private val scope: CoroutineScope,
+    private val onMetrics: (Map<String, Any?>) -> Unit = {},
+    private val onDisconnect: () -> Unit = {},
+) {
     private val adapter: BluetoothAdapter? =
         context.getSystemService(BluetoothManager::class.java)?.adapter
     private val main = Handler(Looper.getMainLooper())
@@ -117,6 +122,7 @@ internal class RowerConnection(private val context: Context, private val scope: 
             } finally {
                 current?.close()
                 if (attempt == generation) {
+                    if (current != null) onDisconnect()
                     controlJob?.cancel()
                     controlJob = null
                     session = null
@@ -134,6 +140,7 @@ internal class RowerConnection(private val context: Context, private val scope: 
         controlJob = null
         connectionJob?.cancel()
         connectionJob = null
+        if (session != null) onDisconnect()
         session = null
         mutableState.value = mutableState.value.copy(connection = ConnectionState.DISCONNECTED, controlling = false)
     }
@@ -266,6 +273,7 @@ internal class RowerConnection(private val context: Context, private val scope: 
         }
 
         private fun updateMetrics(values: Map<String, Any?>) {
+            onMetrics(values)
             val now = SystemClock.elapsedRealtime()
             mutableState.value = mutableState.value.copy(
                 readings = mutableState.value.readings + values.mapValues { Reading(it.value, now) }
