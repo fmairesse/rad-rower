@@ -1,6 +1,6 @@
 # Contexte du projet
 
-Dernière mise à jour : 2026-11-15.
+Dernière mise à jour : 2026-11-16.
 
 ## Objectif
 
@@ -9,6 +9,17 @@ Sport RL via Bluetooth LE. On explore d’abord le protocole sous Linux avec
 Python et Bleak (`bleak/`), avant de l’utiliser dans `android/`.
 
 ## Étape actuelle
+
+Android implementation started on 2026-11-16. The Compose dashboard now scans
+automatically for `I_RW` in the foreground, shows live metrics and offers
+start, pause, resume and stop controls. `android/app/src/main/java/io/radrower/RowerConnection.kt`
+uses the protocol in `RowerProtocol.kt`, checks the age of the rower state and
+waits for confirmations. Unit tests cover protocol frames and command sequencing;
+simulated Compose UI tests pass on an Android 16 emulator. On 2026-11-16 the
+user reported that the Android application worked perfectly in a test; the
+phone and exact test conditions were not specified.
+Workout storage and Health Connect export remain to be implemented. See
+`android/README.md` for operation and limitations.
 
 `bleak/02-connection.py` maintient la connexion avec le rameur (validé par
 l’utilisateur le 2026-11-14) : initialisation de 25 écritures puis poll

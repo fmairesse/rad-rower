@@ -1,4 +1,4 @@
-package com.example.radrower.ui.theme
+package io.radrower.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
