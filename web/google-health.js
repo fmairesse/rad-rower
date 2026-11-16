@@ -69,11 +69,11 @@ export function exportWorkout(session, samples) {
       ],
       exerciseMetadata: { hasGps: false },
       notes: JSON.stringify({ app: "Radrower", sessionId: session.id, partial: session.partial,
-        units: { watts: "W", averageWatts: "W", cadence: "strokes/min", strokes: "strokes",
-          resistance: "level / 24", pace: "s/500m", averagePace: "s/500m", speed: "km/h",
-          distance: "m", elapsed: "s", paused: "s", calories: "kcal", caloriesPerHour: "kcal/h" },
+        units: { averageWatts: "W", averageCadence: "strokes/min", strokes: "strokes",
+          averageSpeed: "km/h", averagePace: "s/500m", distance: "m", elapsed: "s",
+          paused: "s", calories: "kcal" },
         rowerMetrics: session.metrics, sampledStatistics,
-        caveats: "Rower counters; partial recordings may omit earlier samples. Paused time, average power and average pace interpretations are provisional. Calories/hour is estimated. Sample means are not time-weighted. Raw samples remain on the device." }),
+        caveats: "Rower counters; partial recordings may omit earlier samples. Average cadence is a sample mean; average speed and pace use recorded active time and distance. Average power interpretation is provisional. Raw samples remain on the device." }),
     },
   };
 }

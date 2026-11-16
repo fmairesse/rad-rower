@@ -1,3 +1,6 @@
+const SUMMARY_COUNTERS = ["distance", "calories", "strokes", "elapsed", "paused"];
+const OMITTED_SAMPLE_METRICS = new Set(["averagePace", "caloriesPerHour"]);
+
 export class SessionStore {
   constructor(indexedDB = globalThis.indexedDB) {
     this.database = new Promise((resolve, reject) => {
@@ -73,6 +76,11 @@ export class SessionRecorder {
     this.makeId = makeId;
     this.current = null;
     this.pending = Promise.resolve();
+    this.rowerState = null;
+    this.activeMilliseconds = 0;
+    this.lastRecordAt = null;
+    this.cadenceTotal = 0;
+    this.cadenceSamples = 0;
   }
 
   persist(sample) {
@@ -92,15 +100,42 @@ export class SessionRecorder {
         partial: values.sessionState === 3 || Number(values.elapsed) > 2,
         startUtcOffset: `${-new Date(timestamp).getTimezoneOffset() * 60}s`,
       };
+      this.rowerState = values.sessionState;
+      this.activeMilliseconds = 0;
+      this.lastRecordAt = timestamp;
+      this.cadenceTotal = 0;
+      this.cadenceSamples = 0;
     }
     if (!this.current) return;
+    if (this.lastRecordAt !== null && this.rowerState === 2) {
+      this.activeMilliseconds += timestamp - this.lastRecordAt;
+    }
+    this.lastRecordAt = timestamp;
+    const sampleState = values.sessionState ?? this.rowerState;
+    if (values.sessionState != null) this.rowerState = values.sessionState;
     const metrics = Object.fromEntries(Object.entries(values)
-      .filter(([, value]) => value === null || typeof value === "number" || typeof value === "string"));
+      .filter(([key, value]) => !OMITTED_SAMPLE_METRICS.has(key) &&
+        (value === null || typeof value === "number" || typeof value === "string")));
     const finishing = [1, 4, 10].includes(values.sessionState);
-    if (values.sessionState !== 1) {
-      for (const [key, value] of Object.entries(metrics)) {
-        if (value !== null) this.current.metrics[key] = value;
+    for (const key of SUMMARY_COUNTERS) {
+      const value = values[key];
+      if (Number.isFinite(value) && value >= 0) {
+        this.current.metrics[key] = Math.max(this.current.metrics[key] ?? 0, value);
       }
+    }
+    if (Number.isFinite(values.averageWatts) && values.averageWatts > 0) {
+      this.current.metrics.averageWatts = values.averageWatts;
+    }
+    if (sampleState === 2 && Number.isFinite(values.cadence) && values.cadence > 0) {
+      this.cadenceTotal += values.cadence;
+      this.cadenceSamples += 1;
+      this.current.metrics.averageCadence = Math.round(this.cadenceTotal / this.cadenceSamples * 100) / 100;
+    }
+    const distance = this.current.metrics.distance;
+    const activeSeconds = this.activeMilliseconds / 1000;
+    if (!this.current.partial && distance > 0 && activeSeconds > 0) {
+      this.current.metrics.averageSpeed = Math.round(distance / activeSeconds * 360) / 100;
+      this.current.metrics.averagePace = Math.round(activeSeconds * 50000 / distance) / 100;
     }
     const sample = {
       sessionId: this.current.id, sequence: this.current.sampleCount++, timestamp, metrics,
@@ -117,6 +152,11 @@ export class SessionRecorder {
     this.current.endUtcOffset = `${-new Date(timestamp).getTimezoneOffset() * 60}s`;
     this.persist();
     this.current = null;
+    this.rowerState = null;
+    this.activeMilliseconds = 0;
+    this.lastRecordAt = null;
+    this.cadenceTotal = 0;
+    this.cadenceSamples = 0;
     return this.pending;
   }
 

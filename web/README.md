@@ -64,10 +64,11 @@ The page displays power, distance, resistance, cadence, stroke count, pace,
 speed, elapsed time, calories, estimated calories per hour, average power,
 paused time and average pace. Speed is `1800 / pace_seconds`; calories per
 hour is an empirical estimate from power, unavailable at zero power. Paused
-time, average power and average pace are probable interpretations, not yet
-validated live.
+time and average power are probable interpretations, not yet validated live.
+The live field named average pace is also unverified; the stored session
+average is instead calculated from distance and active duration.
 Some values may temporarily be unavailable during a pause; the page does not
-reconstruct cumulative distance or calories from earlier readings.
+reconstruct cumulative distance or calories for display from earlier readings.
 
 - [`protocol.js`](protocol.js) ports the exact initialization, poll messages,
   reassembly, resistance mapping, and decoding from
@@ -107,12 +108,19 @@ unknown fields, and hardware validation history.
 
 Workouts are stored in IndexedDB (`radrower`, version 1), scoped to this
 browser and origin. The `sessions` store holds UUID, start/end timestamps,
-status (`recording`, `completed`, `interrupted`), last available metrics,
-sample count, a `partial` flag for workouts joined in progress, and `synced`
-(initially `false`). The separate `samples` store holds every received metric
-delta with a timestamp and sequence number, including unavailable (`null`)
-values and pause/resume states. It is indexed by session UUID for future charts.
-No Bluetooth identifiers are stored. Idle counters do not overwrite final totals.
+status (`recording`, `completed`, `interrupted`), cumulative totals and session
+averages, sample count, a `partial` flag for workouts joined in progress, and
+`synced` (initially `false`). The separate `samples` store holds received
+metric deltas with a timestamp and sequence number, including unavailable
+(`null`) values and pause/resume states. Estimated calories per hour and the
+unverified field previously named `averagePace` are omitted. It is indexed by
+session UUID for future charts. No Bluetooth identifiers are stored.
+
+Session summaries keep the highest observed distance, calories, strokes,
+elapsed and paused counters, so terminal resets do not erase totals. Average
+cadence is the arithmetic mean of nonzero samples while active. Average speed
+and pace are calculated from distance and timestamped active duration for
+complete sessions; they are omitted for partial sessions.
 
 Each notification is saved asynchronously in an atomic transaction. Stop or a
 reported end/idle state completes a workout; disconnection marks it interrupted.
