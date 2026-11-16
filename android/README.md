@@ -1,10 +1,11 @@
 # Radrower Android
 
 The Android app displays ProForm Sport RL metrics and controls a session. It
-targets a Pixel 3a running Android 12. The app scans for the first device
-advertising as `I_RW` when opened and Bluetooth permission is granted; no
-Bluetooth identifier is stored. Turn the rower on and disconnect other apps
-before opening Radrower. The scan stops after 12 seconds; use **Retry
+requires Android 8.0 (API 26) or newer and targets a Pixel 3a running Android
+12. The app scans for the first device advertising as `I_RW` when opened and
+Bluetooth permission is granted; no Bluetooth identifier is stored. Turn the
+rower on and disconnect other apps before opening Radrower. The scan stops
+after 12 seconds; use **Retry
 connection** if the rower was not found or the connection was lost.
 
 On Android 12 and newer, grant the nearby-devices permissions. On Android 11
@@ -46,7 +47,17 @@ No measurements are inferred for missing intervals; a sudden shutdown may lose
 pending writes. Storage errors are displayed on the dashboard. Android's
 configured app backup behavior also applies to the database.
 
-Health Connect export is not implemented yet.
+Completed, non-partial workouts can be exported from **Workout history** to
+Health Connect. Export is always initiated by the user. Radrower writes an
+indoor rowing exercise session and, when reported by the rower, its distance
+and active calories. It does not read Health Connect data or export raw
+telemetry. Health Connect permissions are requested only when needed; export
+errors are shown in the history. Repeating an export uses stable client record
+IDs to avoid creating another copy of the same workout.
+
+Health Connect must be installed and available on the device. Export behavior
+and permissions still need to be verified against a real Health Connect
+provider; local workout recording remains independent of Health Connect.
 
 Build and run unit tests from the repository root:
 

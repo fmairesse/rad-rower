@@ -104,3 +104,27 @@ conversation. Si un choix change, indiquer quelle décision le remplace.
 - Limits: pending writes may be lost on abrupt termination; Android app backup
   settings apply. The app does not store Bluetooth device identifiers.
 - Tests: `android/app/src/androidTest/java/io/radrower/WorkoutPersistenceTest.kt`.
+
+## D008 - Export completed Android workouts to Health Connect
+
+- Date: 2026-11-16.
+- Status: implemented; a real Health Connect provider has not yet been tested.
+- Decision: offer a user-triggered export from workout history for completed,
+  non-partial workouts only. Write an indoor rowing `ExerciseSessionRecord`
+  and, when available, the rower-reported distance and active calories.
+- Reason: make the already-persisted local summary available to fitness apps
+  without making Health Connect a prerequisite for recording.
+- Privacy and retries: request only the write permissions needed for a
+  workout's available metrics; never read Health Connect records. Use stable
+  client record IDs and version 1 for the session and totals so retrying the
+  same immutable workout does not create a second copy. Raw samples remain
+  local.
+- Limits: availability, consent UI, permissions and remote write behavior
+  require a real-provider test. Partial and interrupted workouts are not
+  exported; zero or unavailable metric totals are omitted.
+- Compatibility: raise the app minimum API from 24 to 26 because the official
+  Health Connect client declares API 26 as its minimum. Health Connect itself
+  may still be unavailable on some devices running API 26 or 27.
+- Source: [Health Connect write data](https://developer.android.com/health-and-fitness/health-connect/write-data),
+  [exercise sessions](https://developer.android.com/reference/kotlin/androidx/health/connect/client/records/ExerciseSessionRecord),
+  [AndroidX release notes](https://developer.android.com/jetpack/androidx/releases/health-connect).

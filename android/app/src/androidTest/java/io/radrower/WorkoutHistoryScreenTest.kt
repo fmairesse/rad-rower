@@ -1,7 +1,9 @@
 package io.radrower
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -12,6 +14,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.test.platform.app.InstrumentationRegistry
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import java.text.DateFormat
@@ -22,6 +25,7 @@ class WorkoutHistoryScreenTest {
 
     private fun workout(id: String, timestamp: Long = 1_700_000_000_000) = Workout(
         id = id, startedAt = timestamp, startedOffsetSeconds = 0,
+        endedAt = timestamp + 3_723_000, endedOffsetSeconds = 0,
         lastSampleAt = timestamp, lastSampleOffsetSeconds = 0,
         status = "completed", partial = false,
         elapsed = 3723.0, distance = 1234.0, calories = 42.0,
@@ -55,6 +59,26 @@ class WorkoutHistoryScreenTest {
         compose.setContent { WorkoutHistoryScreen(workouts, null, {}) }
         compose.onNodeWithTag("workoutHistory").performScrollToNode(hasText(oldest))
         compose.onNodeWithText(oldest).assertIsDisplayed()
+    }
+
+    @Test fun exportsOnlyEligibleWorkoutsWhenRequested() {
+        var exported: Workout? = null
+        compose.setContent {
+            WorkoutHistoryScreen(
+                listOf(
+                    workout("complete"),
+                    workout("partial").copy(partial = true),
+                    workout("interrupted").copy(status = "interrupted"),
+                ),
+                null,
+                {},
+                onExport = { exported = it },
+            )
+        }
+
+        compose.onNodeWithText("Export to Health Connect").performClick()
+        compose.runOnIdle { assertEquals("complete", exported?.id) }
+        compose.onAllNodesWithText("Export to Health Connect").assertCountEquals(1)
     }
 
     @Test fun emptyAndErrorStatesAreDistinct() {
