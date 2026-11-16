@@ -87,7 +87,17 @@ notes de protocole.
   **Consentement et envoi réel non validés** ; configurer les origines JavaScript
   OAuth et révoquer les secrets exposés dans les fichiers locaux. Sources,
   prérequis et limites : `web/README.md`, tests : `web/google-health.test.js`.
-  Les 31 tests JavaScript web passent.
+- `web/intervals-icu.js` exporte les séances terminées comme activités manuelles
+  `Rowing` : horodatage local, durée écoulée/active, distance, calories,
+  puissance/cadence moyennes et autres métriques en description. L’identifiant
+  externe Radrower sert à retrouver une activité après un envoi ambigu ; les
+  échecs distants ne suppriment pas la séance locale. Clé API saisie à la demande
+  et gardée en mémoire seulement; Google et intervals.icu ont des états de
+  synchronisation séparés. Les échantillons bruts restent locaux. Tests simulés :
+  `web/intervals-icu.test.js`. **Clé réelle, CORS et envoi réel non validés**;
+  la clé est sensible et doit être utilisée uniquement sur un navigateur/appareil
+  de confiance. Voir `web/README.md` et `docs/decisions.md`.
+  Les 36 tests JavaScript web passent.
 
 - Environnement : adaptateur Bluetooth et `bluetoothctl` 5.72 disponibles ;
   Bleak fonctionne (`poetry` dans `bleak/`) ; le rameur s’annonce `I_RW`.

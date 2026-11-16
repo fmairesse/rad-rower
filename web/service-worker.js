@@ -1,4 +1,4 @@
-const CACHE_NAME = "radrower-shell-v4";
+const CACHE_NAME = "radrower-shell-v5";
 const APP_SHELL = [
   "./index.html",
   "./styles.css",
@@ -6,6 +6,7 @@ const APP_SHELL = [
   "./wake-lock.js",
   "./sessions.js",
   "./google-health.js",
+  "./intervals-icu.js",
   "./rower.js",
   "./protocol.js",
   "./manifest.webmanifest",

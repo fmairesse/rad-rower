@@ -2,6 +2,7 @@ import { RowerConnection } from "./rower.js";
 import { SessionWakeLock } from "./wake-lock.js";
 import { SessionStore, SessionRecorder } from "./sessions.js";
 import { GoogleHealth } from "./google-health.js";
+import { IntervalsIcu } from "./intervals-icu.js";
 
 if (globalThis.isSecureContext && "serviceWorker" in navigator) {
   navigator.serviceWorker.register("./service-worker.js").catch((error) => {
@@ -26,18 +27,25 @@ if (!globalThis.Vue) {
       const savedSessions = ref([]);
       const store = new SessionStore();
       const health = new GoogleHealth(store);
+      const intervals = new IntervalsIcu(store);
       const healthEnabled = ref(false);
       const healthBusy = ref(false);
       const healthError = ref("");
+      const intervalsEnabled = ref(false);
+      const intervalsApiKey = ref("");
+      const intervalsBusy = ref(false);
+      const intervalsError = ref("");
       const healthConnected = computed(() => {
         now.value;
         return healthEnabled.value && health.connected;
       });
+      const intervalsConnected = computed(() => intervalsEnabled.value && intervals.connected);
       const refreshSessions = async () => { savedSessions.value = await store.list(); };
       const recorder = new SessionRecorder(store, {
         async onChange(session) {
           await refreshSessions();
           if (session.status === "completed" && health.connected) syncHealth();
+          if (session.status === "completed" && intervals.connected) syncIntervals();
         },
         onError: (cause) => { storageWarning.value = `Workout storage: ${cause.message}`; },
       });
@@ -210,6 +218,33 @@ if (!globalThis.Vue) {
         healthEnabled.value = false;
         healthError.value = "";
       }
+      async function syncIntervals() {
+        if (intervalsBusy.value) return;
+        intervalsBusy.value = true;
+        intervalsError.value = "";
+        try {
+          if (!intervals.connected) {
+            await intervals.connect(intervalsApiKey.value);
+            intervalsEnabled.value = true;
+            intervalsApiKey.value = "";
+          }
+          await storageReady;
+          await intervals.sync();
+        } catch (cause) {
+          intervalsError.value = cause.message || String(cause);
+        } finally {
+          intervalsBusy.value = false;
+          await refreshSessions().catch((cause) => {
+            storageWarning.value = `Workout storage: ${cause.message}`;
+          });
+        }
+      }
+      function disconnectIntervals() {
+        intervals.disconnect();
+        intervalsEnabled.value = false;
+        intervalsApiKey.value = "";
+        intervalsError.value = "";
+      }
       const visibilityChanged = () => {
         hidden.value = document.hidden;
         wakeLock.setVisible(!document.hidden);
@@ -250,6 +285,7 @@ if (!globalThis.Vue) {
         globalThis.removeEventListener("appinstalled", appInstalled);
         wakeLock.setActive(false);
         disconnectHealth();
+        disconnectIntervals();
         disconnect();
       });
       return {
@@ -257,8 +293,12 @@ if (!globalThis.Vue) {
         canInstall: computed(() => Boolean(installPrompt.value) && !installed.value), installApp,
         supported, supportError, error, warning, wakeLockWarning, storageWarning, savedSessions,
         healthConnected, healthEnabled, healthBusy, healthError, syncHealth, disconnectHealth,
+        intervalsConnected, intervalsApiKey, intervalsBusy, intervalsError,
+        syncIntervals, disconnectIntervals,
         pendingWorkouts: computed(() => savedSessions.value.filter((session) =>
           session.status === "completed" && !session.synced).length),
+        pendingIntervalsWorkouts: computed(() => savedSessions.value.filter((session) =>
+          session.status === "completed" && !session.intervalsSynced).length),
         journal, cards, hidden, freshnessLabel,
         sessionState, sessionReady, sessionLabel, controlling, control, connect, disconnect,
         connectionHint: computed(() => state.value === "streaming"

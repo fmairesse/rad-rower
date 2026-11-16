@@ -103,6 +103,31 @@
     </section>
     <p v-if="healthError" class="notice error" role="alert">{{ healthError }}</p>
 
+    <section class="session health" aria-label="Intervals.icu">
+      <div>
+        <h2>Intervals.icu</h2>
+        <p role="status">{{ intervalsConnected ? 'Connected' : 'Not connected' }}
+          · {{ pendingIntervalsWorkouts }} workouts awaiting sync</p>
+      </div>
+      <div class="actions">
+        <label v-if="!intervalsConnected" class="api-key">
+          API key
+          <input v-model="intervalsApiKey" type="password" autocomplete="off" spellcheck="false">
+        </label>
+        <button :disabled="intervalsBusy || (!intervalsConnected && !intervalsApiKey.trim())"
+                @click="syncIntervals">
+          {{ intervalsBusy ? 'Syncing…' : intervalsConnected ? 'Sync workouts' : 'Connect and sync' }}
+        </button>
+        <button v-if="intervalsConnected" class="secondary" @click="disconnectIntervals">
+          Disconnect Intervals.icu
+        </button>
+      </div>
+    </section>
+    <p v-if="intervalsError" class="notice error" role="alert">{{ intervalsError }}</p>
+    <p v-if="!intervalsConnected" class="security-note">
+      The API key stays in this tab only. Use this on a trusted device; browser scripts can access it.
+    </p>
+
     <section class="help">
       <h2>Connection and compatibility</h2>
       <p>Turn on the rower, close iFit and any Bleak scripts, then select

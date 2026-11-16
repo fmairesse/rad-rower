@@ -70,3 +70,22 @@ conversation. Si un choix change, indiquer quelle décision le remplace.
   to verify API consistency and duplicate behavior.
 - Sources: [workouts](https://developers.google.com/health/data-types/workouts),
   [browser token model](https://developers.google.com/identity/oauth2/web/guides/use-token-model).
+
+## D006 - Offer optional Intervals.icu activity export
+
+- Date: 2026-11-16.
+- Status: adopted; real authorization and upload still require validation.
+- Decision: export completed rowing sessions as manual `Rowing` activities via
+  the Intervals.icu API. Ask for the API key only when connecting, keep it in
+  tab memory and never persist it. Keep this sync state independent from Google.
+- Reason: the web app is static and already records complete sessions locally;
+  the documented API accepts manual activities and exposes external IDs for
+  reconciling retries.
+- Export: summary fields and additional rower metrics in the activity
+  description. Raw telemetry stays local because its stream format has not been
+  validated for this integration. Interrupted sessions are not exported.
+- Limits: an API key is sensitive and broader than a scoped OAuth grant; use
+  only on a trusted device. API authorization, browser CORS and real upload need
+  an authenticated trial. Idempotency relies on Intervals.icu activity listing
+  returning the external ID consistently.
+- Source: [Intervals.icu API documentation](https://intervals.icu/api-docs.html).

@@ -203,6 +203,33 @@ References: [Google Health workouts](https://developers.google.com/health/data-t
 [data point schema](https://developers.google.com/health/reference/rest/v4/users.dataTypes.dataPoints),
 [Google browser token model](https://developers.google.com/identity/oauth2/web/guides/use-token-model).
 
+## Optional Intervals.icu export
+
+Enter an Intervals.icu API key from your account settings and choose **Connect
+and sync**. The app validates it with `GET /api/v1/athlete/0`, then keeps the key
+and athlete ID in tab memory only. Reloading or disconnecting clears them. The
+key is sent to Intervals.icu using HTTP Basic authentication; it is not stored in
+IndexedDB, localStorage or the service worker cache. Use this only in a trusted
+browser on a trusted device: browser scripts, extensions and anyone with access
+to developer tools can inspect or use the key. Treat it as a sensitive account
+credential and disconnect when finished.
+
+Completed workouts are exported as manual `Rowing` activities with local start
+time, elapsed and active duration, distance, calories, average power/cadence,
+device name and a description containing the other captured rower metrics.
+Interrupted workouts are not exported. The `external_id` is derived from the
+local session UUID; before creation the app lists activities for that day and
+checks that ID, and checks again after an ambiguous network failure before a
+retry. Intervals.icu's activity ID and sync time are saved locally only after a
+confirmed response. Google Health and Intervals.icu have independent sync
+states. Raw telemetry remains in IndexedDB and is not uploaded; no heart rate,
+GPS or other unmeasured data is created.
+
+The API key is not a narrowly scoped OAuth token, and this static app has no
+backend to protect it or synchronize in the background. API authorization,
+browser CORS behavior and a real authenticated upload have not been validated;
+the tests use simulated responses. See the [Intervals.icu API documentation](https://intervals.icu/api-docs.html).
+
 ## Tests
 
 With an existing Node.js **22.7+** installation (optional, tests only):
@@ -220,7 +247,9 @@ with no package manifest or dependencies. They compare every setup/poll byte
   Bluetooth hardware or control the physical display.
   Storage and Google Health tests cover metric recording, final totals, recovery,
   payload units, consent failures, expiration, uncertain writes and conflict
-  readback. The current suite contains 30 passing tests.
+  readback. Intervals.icu tests cover payloads, API-key authentication, export
+  confirmation and ambiguous network failures. The current suite contains 36
+  passing tests.
 
 Browser UI checks and automated mocks cannot certify the real BLE link.
 **The web implementation still needs a hardware trial**: confirm connection

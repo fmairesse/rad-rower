@@ -32,6 +32,9 @@ h2 { font-size: 15px; margin: 0; font-weight: 600; }
 .session { padding: 22px 0; border-bottom: 1px solid #d5ddd3; }
 .session p { color: #4c6155; font-size: 13px; margin: 7px 0 0; }
 .actions { gap: 10px; flex-wrap: wrap; }
+.api-key { display: grid; gap: 5px; color: #4c6155; font-size: 12px; }
+.api-key input { width: min(280px, 72vw); border: 1px solid #aebcaf; border-radius: 6px; padding: 10px 12px; font: inherit; }
+.security-note { color: #56685b; font-size: 12px; margin: -8px 0 8px; }
 button { border: 1px solid #173b2f; border-radius: 9px; background: #173b2f; color: #fff; padding: 13px 19px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
 button:hover:enabled { background: #2b5542; }
 button:disabled { opacity: .5; cursor: not-allowed; }
