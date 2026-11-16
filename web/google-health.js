@@ -49,7 +49,6 @@ export function exportWorkout(session, samples) {
   const sampledStatistics = Object.fromEntries(Object.entries(statistics).map(([key, entry]) =>
     [key, { min: entry.min, max: entry.max, sampleMean: entry.sum / entry.count }]));
   return {
-    name: `users/me/dataTypes/exercise/dataPoints/${session.id}`,
     dataSource: {
       recordingMethod: "ACTIVELY_MEASURED",
       device: { manufacturer: "ProForm", displayName: "Sport RL" },
@@ -142,6 +141,20 @@ export class GoogleHealth {
     return body;
   }
 
+  async findWorkout(session) {
+    const offsetSeconds = Number.parseInt(session.startUtcOffset || "0s", 10);
+    const localStart = new Date(session.startedAt + offsetSeconds * 1000);
+    const dayStart = localStart.toISOString().slice(0, 10);
+    const nextDay = new Date(Date.UTC(localStart.getUTCFullYear(), localStart.getUTCMonth(),
+      localStart.getUTCDate() + 1)).toISOString().slice(0, 10);
+    const filter = `exercise.interval.civil_start_time >= "${dayStart}" AND exercise.interval.civil_start_time < "${nextDay}"`;
+    const query = new URLSearchParams({ filter, pageSize: "25" });
+    const result = await this.request(`users/me/dataTypes/exercise/dataPoints?${query}`);
+    return result?.dataPoints?.find((point) =>
+      Date.parse(point.exercise?.interval?.startTime) === session.startedAt &&
+      Date.parse(point.exercise?.interval?.endTime) === session.endedAt) || null;
+  }
+
   async sync() {
     if (this.syncing) return;
     this.syncing = true;
@@ -151,7 +164,7 @@ export class GoogleHealth {
         if (generation !== this.generation) break;
         if (session.synced || session.status !== "completed") continue;
         const payload = exportWorkout(session, await this.store.samples(session.id));
-        let remote = await this.request(payload.name);
+        let remote = await this.findWorkout(session);
         if (generation !== this.generation) break;
         if (!remote) {
           if (session.googleOperationPending) throw new Error("Google is still processing a workout. Retry sync later.");
@@ -164,7 +177,7 @@ export class GoogleHealth {
             });
           } catch (error) {
             if (error.status === 409) {
-              const existing = await this.request(payload.name);
+              const existing = await this.findWorkout(session);
               if (existing) operation = { done: true, response: existing };
             }
             if (error.status && error.status !== 409) {

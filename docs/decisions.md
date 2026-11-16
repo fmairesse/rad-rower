@@ -63,7 +63,10 @@ conversation. Si un choix change, indiquer quelle décision le remplace.
 - Export: workout summaries and pause/resume events, extra rowing metrics in
   notes. Raw telemetry is kept locally because Google's intraday write endpoints
   are not supported. No walking steps or unmeasured health metrics are invented.
-- Confirmation: mark `synced` only after remote completion/readback; reuse the
-  documented client-provided ID to reconcile ambiguous writes and conflicts.
+- Confirmation: query the exercise collection by civil date before upload and
+  match exact interval timestamps. Let Google assign the resource ID; use
+  collection readback to reconcile ambiguous writes and conflicts. Mark `synced`
+  only after remote completion/readback. A real authenticated trial is required
+  to verify API consistency and duplicate behavior.
 - Sources: [workouts](https://developers.google.com/health/data-types/workouts),
   [browser token model](https://developers.google.com/identity/oauth2/web/guides/use-token-model).

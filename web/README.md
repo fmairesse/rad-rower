@@ -178,14 +178,17 @@ Google's intraday telemetry streams are read-only: the REST write API cannot
 import the raw power/cadence/distance time series. All samples remain in IndexedDB
 for future local charts. No heart rate, GPS, steps or elevation are fabricated.
 
-The session UUID is used as the documented client-provided data point name.
-Before uploading, readback checks for an existing exercise. A successful HTTP
-response alone is not enough: `synced` becomes true only after a completed
-operation or readback confirms matching start/end times. The Google resource
-name and sync timestamp are retained. Network failures can be retried with the
-same resource ID; conflicts trigger readback rather than a new exercise ID.
-Pending asynchronous operations remain unsynced until a later readback finds the
-exercise. This service's client-provided ID behavior still needs a real trial.
+Before uploading, the app lists exercises for that civil date and checks for a
+matching start/end interval. This uses the documented collection `GET`; it does
+not try to read a resource using the local session UUID. Creation uses the
+documented `POST` body without a client-supplied resource name, so Google assigns
+the workout's ID. A successful HTTP response alone is not enough: `synced`
+becomes true only after a completed operation or collection readback confirms
+matching start/end times. The server-assigned resource name and sync timestamp
+are retained. Network failures and create conflicts trigger another collection
+readback before retrying. Pending asynchronous operations remain unsynced until a
+later readback finds the exercise. Duplicate protection depends on the real API's
+listing consistency and still needs an authenticated trial.
 
 References: [Google Health workouts](https://developers.google.com/health/data-types/workouts),
 [create data point](https://developers.google.com/health/reference/rest/v4/users.dataTypes.dataPoints/create),

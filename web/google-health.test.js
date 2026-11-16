@@ -44,19 +44,30 @@ function fixture(responses) {
   return { health, saved, calls };
 }
 
-const remote = exportWorkout(session, samples);
+const remote = {
+  name: "users/me/dataTypes/exercise/dataPoints/3054085373369111216",
+  exercise: exportWorkout(session, samples).exercise,
+};
 
 test("marks synced only after a confirmed operation and never uploads again", async () => {
-  const { health, saved, calls } = fixture([{ status: 404, body: {} }, { body: { done: true, response: remote } }]);
+  const { health, saved, calls } = fixture([
+    { body: { dataPoints: [] } }, { body: { done: true, response: remote } },
+  ]);
   await health.sync();
   assert.equal(saved.synced, true);
+  assert.equal(new URL(calls[0].url).searchParams.has("filter"), true);
+  assert.equal(calls[0].options.method, undefined);
   assert.equal(calls[1].options.method, "POST");
+  assert.equal("name" in JSON.parse(calls[1].options.body), false);
   await health.sync();
   assert.equal(calls.length, 2);
 });
 
 test("uncertain writes are checked remotely on retry instead of duplicated", async () => {
-  const { health, saved, calls } = fixture([{ status: 404, body: {} }, new Error("Network lost"), { body: remote }]);
+  const { health, saved, calls } = fixture([
+    { body: { dataPoints: [] } }, new Error("Network lost"),
+    { body: { dataPoints: [remote] } },
+  ]);
   await assert.rejects(health.sync(), /retained locally/);
   assert.equal(saved.synced, false);
   assert.equal(saved.googlePending, true);
@@ -67,7 +78,7 @@ test("uncertain writes are checked remotely on retry instead of duplicated", asy
 
 test("pending operations, rejected operations and expired tokens keep sessions unsynced", async () => {
   for (const response of [{ done: false }, { done: true, error: { message: "Invalid workout" } }]) {
-    const { health, saved } = fixture([{ status: 404, body: {} }, { body: response }]);
+    const { health, saved } = fixture([{ body: { dataPoints: [] } }, { body: response }]);
     await assert.rejects(health.sync());
     assert.equal(saved.synced, false);
   }
@@ -100,8 +111,8 @@ test("explicit HTTP rejection allows retry and equivalent timestamp formatting c
   alternate.exercise.interval.startTime = alternate.exercise.interval.startTime.replace(".000Z", "Z");
   alternate.exercise.interval.endTime = alternate.exercise.interval.endTime.replace(".000Z", "Z");
   const { health, saved } = fixture([
-    { status: 404, body: {} }, { status: 403, body: { error: { message: "Access denied" } } },
-    { status: 404, body: {} }, { body: { done: true, response: alternate } },
+    { body: { dataPoints: [] } }, { status: 403, body: { error: { message: "Access denied" } } },
+    { body: { dataPoints: [] } }, { body: { done: true, response: alternate } },
   ]);
   await assert.rejects(health.sync(), /Access denied/);
   assert.equal(saved.googlePending, false);
@@ -109,15 +120,17 @@ test("explicit HTTP rejection allows retry and equivalent timestamp formatting c
   assert.equal(saved.synced, true);
 });
 
-test("a lost write can be retried with the same client ID; conflicts are confirmed by readback", async () => {
+test("a lost write and create conflict are resolved by querying the exercise collection", async () => {
   const { health, saved, calls } = fixture([
-    { status: 404, body: {} }, new Error("Network lost"),
-    { status: 404, body: {} }, { status: 409, body: { error: { message: "Already exists" } } },
-    { body: remote },
+    { body: { dataPoints: [] } }, new Error("Network lost"),
+    { body: { dataPoints: [] } }, { status: 409, body: { error: { message: "Already exists" } } },
+    { body: { dataPoints: [remote] } },
   ]);
   await assert.rejects(health.sync());
   await health.sync();
   const writes = calls.filter((call) => call.options.method === "POST");
-  assert.equal(JSON.parse(writes[0].options.body).name, JSON.parse(writes[1].options.body).name);
+  assert.equal(writes.length, 2);
+  assert.equal("name" in JSON.parse(writes[0].options.body), false);
+  assert.equal("name" in JSON.parse(writes[1].options.body), false);
   assert.equal(saved.synced, true);
 });
