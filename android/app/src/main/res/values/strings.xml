@@ -1,4 +1,4 @@
 <resources>
     <string name="app_name">Rad Rower</string>
-    <string name="health_connect_permission_rationale">Radrower uses Health Connect only when you choose to export a completed rowing workout. It writes the exercise session and, when available, the rower\'s distance and calories. Radrower does not read data from Health Connect. Workouts stay on this device unless you choose to export them. You can revoke access in Health Connect settings.</string>
+    <string name="health_connect_permission_rationale">Radrower uses Health Connect only when you choose to export a completed rowing workout. It writes the exercise session and, when available, distance and calories reported by the rower, plus measured power samples. Radrower does not read data from Health Connect. Workouts stay on this device unless you choose to export them. You can revoke access in Health Connect settings.</string>
 </resources>

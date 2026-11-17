@@ -50,10 +50,12 @@ configured app backup behavior also applies to the database.
 Completed, non-partial workouts can be exported from **Workout history** to
 Health Connect. Export is always initiated by the user. Radrower writes an
 indoor rowing exercise session and, when reported by the rower, its distance
-and active calories. It does not read Health Connect data or export raw
-telemetry. Health Connect permissions are requested only when needed; export
-errors are shown in the history. Repeating an export uses stable client record
-IDs to avoid creating another copy of the same workout.
+and active calories, plus measured power samples recorded while the workout
+was active. Power samples from pauses, missing values and invalid values are
+omitted. Other raw telemetry is not exported. Radrower does not read Health
+Connect data. Health Connect permissions are requested only when needed;
+export errors are shown in the history. Repeating an export uses stable client
+record IDs to avoid creating another copy of the same workout.
 
 Health Connect must be installed and available on the device. Export behavior
 and permissions still need to be verified against a real Health Connect

@@ -1,6 +1,6 @@
 # Contexte du projet
 
-Dernière mise à jour : 2026-11-16.
+Dernière mise à jour : 2026-11-17.
 
 ## Objectif
 
@@ -28,11 +28,12 @@ do not release it before the connection is lost or another state arrives.
 The persistence and UI tests pass with simulated data on an Android 16
 emulator; the recording has not yet been tested on the real rower. Completed,
 non-partial workouts can now be exported on request to Health Connect as an
-indoor rowing session with available distance and active-calorie totals.
-Permissions are requested only as needed and local recording remains
-independent. Health Connect availability, permission UX and writes still need
-validation with a real provider. See `android/README.md` for operation and
-limitations.
+indoor rowing session with available distance, active-calorie totals and
+timestamped power measurements recorded while active. Pause samples are
+excluded. Permissions are requested only as needed and local recording
+remains independent. Health Connect availability, permission UX and writes
+still need validation with a real provider. See `android/README.md` for
+operation and limitations.
 
 `bleak/02-connection.py` maintient la connexion avec le rameur (validé par
 l’utilisateur le 2026-11-14) : initialisation de 25 écritures puis poll

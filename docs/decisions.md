@@ -108,17 +108,21 @@ conversation. Si un choix change, indiquer quelle décision le remplace.
 ## D008 - Export completed Android workouts to Health Connect
 
 - Date: 2026-11-16.
-- Status: implemented; a real Health Connect provider has not yet been tested.
+- Status: implemented, including measured power samples on 2026-11-17; a real
+  Health Connect provider has not yet been tested.
 - Decision: offer a user-triggered export from workout history for completed,
   non-partial workouts only. Write an indoor rowing `ExerciseSessionRecord`
-  and, when available, the rower-reported distance and active calories.
+  and, when available, the rower-reported distance and active calories, plus
+  the timestamped measured power series while actively rowing.
 - Reason: make the already-persisted local summary available to fitness apps
   without making Health Connect a prerequisite for recording.
 - Privacy and retries: request only the write permissions needed for a
   workout's available metrics; never read Health Connect records. Use stable
-  client record IDs and version 1 for the session and totals so retrying the
-  same immutable workout does not create a second copy. Raw samples remain
-  local.
+  client record IDs and version 1 for each record so retrying the same
+  immutable workout does not create a second copy. Export power measurements
+  from locally stored samples only when their session state is active; pause,
+  missing, invalid and out-of-session samples are excluded. Other raw samples
+  remain local.
 - Limits: availability, consent UI, permissions and remote write behavior
   require a real-provider test. Partial and interrupted workouts are not
   exported; zero or unavailable metric totals are omitted.
@@ -127,4 +131,5 @@ conversation. Si un choix change, indiquer quelle décision le remplace.
   may still be unavailable on some devices running API 26 or 27.
 - Source: [Health Connect write data](https://developer.android.com/health-and-fitness/health-connect/write-data),
   [exercise sessions](https://developer.android.com/reference/kotlin/androidx/health/connect/client/records/ExerciseSessionRecord),
+  [power records](https://developer.android.com/reference/kotlin/androidx/health/connect/client/records/PowerRecord),
   [AndroidX release notes](https://developer.android.com/jetpack/androidx/releases/health-connect).
