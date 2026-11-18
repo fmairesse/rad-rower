@@ -53,7 +53,7 @@ configured app backup behavior also applies to the database.
 
 Completed, non-partial workouts can be exported from **Workout history** to
 Health Connect. Export is always initiated by the user. Radrower writes an
-indoor rowing exercise session, distance intervals derived from the rower's
+indoor rowing exercise session, distance windows (up to 60 s) derived from the rower's
 cumulative distance readings while active, active calories, and measured
 power samples recorded while the workout was active. Distance counter resets
 and readings during pauses are not counted as distance. Power samples from

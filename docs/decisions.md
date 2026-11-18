@@ -124,12 +124,21 @@ conversation. Si un choix change, indiquer quelle décision le remplace.
   not create a second copy. Derive distance deltas only
   between monotonic readings in active session state, and split records around
   pauses; disregard counter decreases and pause values. Preserve the previous
-  distance as the summary total. The first interval reuses the previous
-  whole-session distance record ID at version 2, replacing that export when
-  workouts are re-exported after this change. Export power measurements from
+  distance as the summary total. Consecutive deltas within one active
+  stretch are merged into windows of at most 60 s (2026-11-18) to avoid
+  writing one record per sample. The first window reuses the earlier
+  whole-session distance record ID; all distance records use version 3 so a
+  re-export overwrites previous layouts (extra per-sample records from an
+  earlier export, if any, would not be removed). Export power measurements from
   locally stored samples only when their session state is active; pause,
   missing, invalid and out-of-session samples are excluded. Other raw samples
   remain local.
+- Write limits: Health Connect guidance recommends at most 1000 records per
+  write request, so `insertRecords` is called in chunks of 1000. The SDK
+  (androidx.health.connect:connect-client 1.1.0) caps each power sample at
+  0-100000 W but sets no limit on samples per `PowerRecord`; whether the
+  Health Connect service enforces one is unverified, so the power series is
+  exported without downsampling until a real-provider test shows otherwise.
 - Limits: availability, consent UI, permissions and remote write behavior
   require a real-provider test. Partial and interrupted workouts are not
   exported; zero or unavailable metric totals are omitted.

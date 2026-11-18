@@ -17,6 +17,15 @@ import java.time.Instant
 import java.time.ZoneOffset
 
 internal object HealthConnectExport {
+    // Distance deltas are grouped into windows to keep the record count small.
+    private const val DISTANCE_WINDOW_MILLIS = 60_000L
+
+    // Health Connect guidance: at most 1000 records per write request.
+    private const val MAX_RECORDS_PER_INSERT = 1_000
+
+    // Bumped when the distance record layout changes so that re-exports overwrite older records.
+    private const val DISTANCE_RECORD_VERSION = 3L
+
     fun isEligible(workout: Workout): Boolean =
         workout.status == "completed" &&
             !workout.partial &&
@@ -68,7 +77,7 @@ internal object HealthConnectExport {
                 metadata = metadata(
                     if (index == 0) "radrower:${workout.id}:distance"
                     else "radrower:${workout.id}:distance:$index",
-                    clientRecordVersion = if (index == 0) 2 else 1,
+                    clientRecordVersion = DISTANCE_RECORD_VERSION,
                 ),
             )
         }
@@ -106,7 +115,8 @@ internal object HealthConnectExport {
         check(grantedPermissions.containsAll(requiredPermissions)) {
             "Health Connect permissions are missing. Grant access and try again."
         }
-        client.insertRecords(records(workout, samples))
+        // Retries are idempotent thanks to stable client record IDs, so chunking is safe.
+        records(workout, samples).chunked(MAX_RECORDS_PER_INSERT).forEach { client.insertRecords(it) }
     }
 
     private fun powerSamples(workout: Workout, samples: List<WorkoutSample>): List<PowerRecord.Sample> {
@@ -135,31 +145,52 @@ internal object HealthConnectExport {
         val start: WorkoutSample,
         val end: WorkoutSample,
         val meters: Double,
+        val activeStretch: Int,
     )
 
     private fun distanceIntervals(workout: Workout, samples: List<WorkoutSample>): List<DistanceInterval> {
         val endAt = workout.endedAt ?: return emptyList()
         var sessionState: Int? = null
         var previous: Pair<WorkoutSample, Double>? = null
+        var activeStretch = 0
         val intervals = mutableListOf<DistanceInterval>()
         for (sample in samples.sortedBy { it.sequence }) {
             val metrics = JSONObject(sample.metricsJson)
             if (metrics.has("sessionState") && !metrics.isNull("sessionState")) {
                 sessionState = metrics.optInt("sessionState", -1)
-                if (sessionState != 2) previous = null
+                if (sessionState != 2 && previous != null) {
+                    previous = null
+                    activeStretch++
+                }
             }
             if (sessionState != 2 || sample.timestamp !in workout.startedAt..endAt) continue
             val distance = (metrics.opt("distance") as? Number)?.toDouble()
                 ?.takeIf { it.isFinite() && it >= 0 } ?: continue
             val earlier = previous
             if (earlier != null && sample.timestamp > earlier.first.timestamp && distance > earlier.second) {
-                intervals += DistanceInterval(earlier.first, sample, distance - earlier.second)
+                intervals += DistanceInterval(earlier.first, sample, distance - earlier.second, activeStretch)
             }
             if (earlier == null || distance >= earlier.second) {
                 previous = sample to distance
             }
         }
-        return intervals
+        return groupByWindow(intervals)
+    }
+
+    // Merge consecutive deltas of the same active stretch into windows of at most DISTANCE_WINDOW_MILLIS.
+    private fun groupByWindow(intervals: List<DistanceInterval>): List<DistanceInterval> {
+        val grouped = mutableListOf<DistanceInterval>()
+        for (interval in intervals) {
+            val last = grouped.lastOrNull()
+            if (last != null && last.activeStretch == interval.activeStretch &&
+                interval.end.timestamp - last.start.timestamp <= DISTANCE_WINDOW_MILLIS
+            ) {
+                grouped[grouped.lastIndex] = last.copy(end = interval.end, meters = last.meters + interval.meters)
+            } else {
+                grouped += interval
+            }
+        }
+        return grouped
     }
 
     private fun metadata(clientRecordId: String, clientRecordVersion: Long = 1) = Metadata.activelyRecorded(

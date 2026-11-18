@@ -115,10 +115,39 @@ class HealthConnectExportTest {
             listOf("radrower:workout-id:distance", "radrower:workout-id:distance:1"),
             distances.map { it.metadata.clientRecordId },
         )
-        assertEquals(2L, distances.first().metadata.clientRecordVersion)
-        assertEquals(1L, distances.last().metadata.clientRecordVersion)
+        assertEquals(listOf(3L, 3L), distances.map { it.metadata.clientRecordVersion })
         assertEquals(150.0, distances.sumOf { it.distance.inMeters }, 0.0)
         assertTrue("android.permission.health.WRITE_DISTANCE" in HealthConnectExport.permissionsFor(workout, samples))
+    }
+
+    @Test
+    fun groupsDistanceIntoOneMinuteWindowsWithinActiveSegments() {
+        val workout = workout(distance = 200.0)
+        // One sample per second, 2 m per second, for 100 s, then a pause and 10 more seconds.
+        val samples = (0..100).map { second ->
+            sample(
+                second,
+                workout.startedAt + second * 1_000L,
+                sessionState = if (second == 0) 2 else null,
+                distance = second * 2,
+            )
+        } + listOf(
+            sample(101, workout.startedAt + 101_000, sessionState = 3, distance = 0),
+            sample(102, workout.startedAt + 102_000, sessionState = 2, distance = 200),
+            sample(103, workout.startedAt + 112_000, distance = 220),
+        )
+
+        val distances = HealthConnectExport.records(workout, samples).filterIsInstance<DistanceRecord>()
+
+        assertEquals(
+            listOf(
+                workout.startedAt to workout.startedAt + 60_000,
+                workout.startedAt + 60_000 to workout.startedAt + 100_000,
+                workout.startedAt + 102_000 to workout.startedAt + 112_000,
+            ),
+            distances.map { it.startTime.toEpochMilli() to it.endTime.toEpochMilli() },
+        )
+        assertEquals(listOf(120.0, 80.0, 20.0), distances.map { it.distance.inMeters })
     }
 
     @Test
