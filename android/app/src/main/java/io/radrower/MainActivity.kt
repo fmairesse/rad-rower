@@ -38,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.lifecycleScope
 import io.radrower.ui.theme.RadRowerTheme
 import kotlinx.coroutines.delay
@@ -368,6 +369,43 @@ internal fun RowerScreen(
                 }
             }
         }
+    }
+}
+
+@Preview(showSystemUi = true)
+@Composable
+private fun RowerScreenPreview() {
+    val now = SystemClock.elapsedRealtime()
+    RadRowerTheme {
+        RowerScreen(
+            state = RowerUiState(
+                connection = ConnectionState.STREAMING,
+                readings = mapOf(
+                    "sessionState" to Reading(2, now),
+                    "watts" to Reading(142, now),
+                    "pace" to Reading(132, now),
+                    "averagePace" to Reading(145, now),
+                    "cadence" to Reading(26, now),
+                    "distance" to Reading(1_250, now),
+                    "strokes" to Reading(68, now),
+                    "speed" to Reading(13.6, now),
+                    "resistance" to Reading(12, now),
+                    "elapsed" to Reading(310, now),
+                    "paused" to Reading(0, now),
+                    "calories" to Reading(42, now),
+                    "caloriesPerHour" to Reading(487, now),
+                    "averageWatts" to Reading(136, now),
+                ),
+            ),
+            permissionGranted = true,
+            bluetoothEnabled = true,
+            bluetoothAvailable = true,
+            onPermission = {},
+            onEnableBluetooth = {},
+            onRetry = {},
+            onToggle = {},
+            onStop = {},
+        )
     }
 }
 
