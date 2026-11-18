@@ -76,6 +76,10 @@ internal class WorkoutRecorder(
     private suspend fun record(event: Event.Metrics) {
         val state = event.values["sessionState"] as? Int
         val previous = current
+        if (previous == null && state !in listOf(2, 3)) {
+            if (state != null) rowerState = state
+            return
+        }
         val workout = previous ?: if (state == 2 || state == 3) {
             Workout(
                 id = UUID.randomUUID().toString(),
@@ -83,7 +87,8 @@ internal class WorkoutRecorder(
                 startedOffsetSeconds = event.offsetSeconds,
                 lastSampleAt = event.timestamp,
                 lastSampleOffsetSeconds = event.offsetSeconds,
-                partial = state == 3 || ((event.values["elapsed"] as? Number)?.toDouble() ?: 0.0) > 2,
+                partial = state == 3 ||
+                    (rowerState != 1 && ((event.values["elapsed"] as? Number)?.toDouble() ?: 0.0) > 2),
             )
         } else return
         val sampleState = state ?: rowerState
@@ -100,9 +105,12 @@ internal class WorkoutRecorder(
         val cadenceTotal = workout.cadenceTotal + if (validCadence) requireNotNull(cadence) else 0.0
         val cadenceSamples = workout.cadenceSamples + if (validCadence) 1 else 0
         val distance = counter("distance", workout.distance)
+        val elapsed = counter("elapsed", workout.elapsed)
         val averageWatts = (event.values["averageWatts"] as? Number)?.toDouble()
             ?.takeIf { it.isFinite() && it > 0 } ?: workout.averageWatts
-        val hasAverage = !workout.partial && distance != null && distance > 0 && activeMillis > 0
+        val hasAverage = !workout.partial &&
+            distance != null && distance > 0 &&
+            elapsed != null && elapsed > 0
         val finished = state in listOf(1, 4, 10)
         val next = workout.copy(
             lastSampleAt = event.timestamp,
@@ -115,14 +123,14 @@ internal class WorkoutRecorder(
             distance = distance,
             calories = counter("calories", workout.calories),
             strokes = counter("strokes", workout.strokes),
-            elapsed = counter("elapsed", workout.elapsed),
+            elapsed = elapsed,
             paused = counter("paused", workout.paused),
             averageWatts = averageWatts,
             cadenceTotal = cadenceTotal,
             cadenceSamples = cadenceSamples,
             averageCadence = if (cadenceSamples > 0) round2(cadenceTotal / cadenceSamples) else null,
-            averageSpeed = if (hasAverage) round2(requireNotNull(distance) / (activeMillis / 1000.0) * 3.6) else null,
-            averagePace = if (hasAverage) round2((activeMillis / 1000.0) * 500 / requireNotNull(distance)) else null,
+            averageSpeed = if (hasAverage) round2(requireNotNull(distance) / requireNotNull(elapsed) * 3.6) else null,
+            averagePace = if (hasAverage) round2(requireNotNull(elapsed) * 500 / requireNotNull(distance)) else null,
         )
         val json = JSONObject()
         for ((key, value) in event.values) {

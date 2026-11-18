@@ -99,8 +99,9 @@ conversation. Si un choix change, indiquer quelle décision le remplace.
 - Reason: preserve recordings independently of Health Connect availability or
   permissions, and retain rowing metrics for later analysis and export.
 - Consequence: mark disconnected or recovered unfinished recordings as
-  interrupted; mark recordings first observed in progress as partial. No Health
-  Connect export is implemented yet.
+  interrupted; mark recordings first observed in progress without a preceding
+  idle state as partial. Calculate average speed and pace from rower-reported
+  active elapsed time and cumulative distance, not local wall-clock timing.
 - Limits: pending writes may be lost on abrupt termination; Android app backup
   settings apply. The app does not store Bluetooth device identifiers.
 - Tests: `android/app/src/androidTest/java/io/radrower/WorkoutPersistenceTest.kt`.
