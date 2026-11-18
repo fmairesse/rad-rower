@@ -1,0 +1,5 @@
+root = true
+
+[*.{kt,kts}]
+# https://github.com/ktlint/ktlint/blob/master/documentation/release-latest/docs/rules/standard.md#function-naming
+ktlint_function_naming_ignore_when_annotated_with = Composable
