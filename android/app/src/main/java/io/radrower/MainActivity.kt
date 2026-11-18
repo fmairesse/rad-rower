@@ -351,18 +351,20 @@ internal fun RowerScreen(
         ) {
             Text("RADROWER", style = MaterialTheme.typography.headlineMedium)
             Text("ProForm Sport RL", style = MaterialTheme.typography.titleMedium)
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(status, style = MaterialTheme.typography.titleMedium)
-                    Text("Keep the app in the foreground. The rower must be on and disconnected from other apps.")
-                    if (!permissionGranted && bluetoothAvailable) {
-                        Button(onClick = onPermission) { Text("Allow Bluetooth") }
-                    } else if (!bluetoothEnabled && bluetoothAvailable) {
-                        Button(onClick = onEnableBluetooth) { Text("Turn on Bluetooth") }
-                    } else if (state.connection == ConnectionState.DISCONNECTED && bluetoothAvailable) {
-                        Button(onClick = onRetry) { Text("Retry connection") }
+            if (state.connection != ConnectionState.STREAMING || sessionState != SessionState.IN_PROGRESS) {
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(status, style = MaterialTheme.typography.titleMedium)
+                        Text("Keep the app in the foreground. The rower must be on and disconnected from other apps.")
+                        if (!permissionGranted && bluetoothAvailable) {
+                            Button(onClick = onPermission) { Text("Allow Bluetooth") }
+                        } else if (!bluetoothEnabled && bluetoothAvailable) {
+                            Button(onClick = onEnableBluetooth) { Text("Turn on Bluetooth") }
+                        } else if (state.connection == ConnectionState.DISCONNECTED && bluetoothAvailable) {
+                            Button(onClick = onRetry) { Text("Retry connection") }
+                        }
+                        state.message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                     }
-                    state.message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }
             }
             if (state.connection == ConnectionState.STREAMING) {
@@ -401,6 +403,9 @@ internal fun RowerScreen(
                             }
                         }
                         if (state.controlling) Text("Waiting for the rower to confirm…")
+                        if (sessionState == SessionState.IN_PROGRESS) {
+                            state.message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                        }
                     }
                 }
             }

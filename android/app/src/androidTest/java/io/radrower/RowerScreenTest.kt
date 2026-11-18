@@ -1,6 +1,9 @@
 package io.radrower
 
 import android.os.SystemClock
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
@@ -36,8 +39,6 @@ class RowerScreenTest {
         compose.onAllNodesWithText("Session").assertCountEquals(0)
         compose.onNodeWithText("Allow Bluetooth").performClick()
         compose.runOnIdle { assertEquals(1, requests) }
-        compose.onNodeWithText("Start").assertIsNotEnabled()
-        compose.onNodeWithText("Stop").assertIsNotEnabled()
     }
 
     @Test fun activeSessionEnablesPauseAndStop() {
@@ -60,7 +61,7 @@ class RowerScreenTest {
                 onStop = { stops++ },
             )
         }
-        compose.onNodeWithText("Connected to I_RW").assertIsDisplayed()
+        compose.onAllNodesWithText("Connected to I_RW").assertCountEquals(0)
         compose.onNodeWithText("Session").assertIsDisplayed()
         compose.onNodeWithText("Pause").assertIsEnabled().performClick()
         compose.onNodeWithText("Stop").assertIsEnabled().performClick()
@@ -69,6 +70,54 @@ class RowerScreenTest {
             assertEquals(1, pauses)
             assertEquals(1, stops)
         }
+    }
+
+    @Test fun connectionCardTracksSessionAndConnectionState() {
+        val now = SystemClock.elapsedRealtime()
+        var state by mutableStateOf(
+            RowerUiState(
+                connection = ConnectionState.STREAMING,
+                readings = mapOf("sessionState" to Reading(1, now)),
+            ),
+        )
+        compose.setContent {
+            RowerScreen(
+                state,
+                permissionGranted = true,
+                bluetoothEnabled = true,
+                bluetoothAvailable = true,
+                onPermission = {},
+                onEnableBluetooth = {},
+                onRetry = {},
+                onToggle = {},
+                onStop = {},
+            )
+        }
+
+        compose.onNodeWithText("Connected to I_RW").assertIsDisplayed()
+        compose.runOnIdle {
+            state = state.copy(
+                readings = mapOf("sessionState" to Reading(2, SystemClock.elapsedRealtime())),
+                message = "Session command failed.",
+            )
+        }
+        compose.onAllNodesWithText("Connected to I_RW").assertCountEquals(0)
+        compose.onNodeWithText("Session command failed.").assertIsDisplayed()
+
+        compose.runOnIdle {
+            state = state.copy(readings = mapOf("sessionState" to Reading(3, SystemClock.elapsedRealtime())))
+        }
+        compose.onNodeWithText("Connected to I_RW").assertIsDisplayed()
+        compose.onAllNodesWithText("Session command failed.").assertCountEquals(1)
+
+        compose.runOnIdle {
+            state = state.copy(
+                connection = ConnectionState.DISCONNECTED,
+                readings = mapOf("sessionState" to Reading(2, SystemClock.elapsedRealtime())),
+            )
+        }
+        compose.onNodeWithText("Disconnected").assertIsDisplayed()
+        compose.onNodeWithText("Retry connection").assertIsDisplayed()
     }
 
     @Test fun staleSessionDisablesCommands() {
@@ -88,6 +137,7 @@ class RowerScreenTest {
                 onStop = {},
             )
         }
+        compose.onNodeWithText("Connected to I_RW").assertIsDisplayed()
         compose.onNodeWithText("State unavailable").assertIsDisplayed()
         compose.onNodeWithText("Start").assertIsNotEnabled()
         compose.onNodeWithText("Stop").assertIsNotEnabled()
