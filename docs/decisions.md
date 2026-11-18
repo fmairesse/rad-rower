@@ -127,12 +127,19 @@ conversation. Si un choix change, indiquer quelle décision le remplace.
   not create a second copy. Derive distance deltas only
   between monotonic readings in active session state, and split records around
   pauses; disregard counter decreases and pause values. Preserve the previous
-  distance as the summary total. Consecutive deltas within one active
-  stretch are merged into windows of at most 60 s (2026-11-18) to avoid
-  writing one record per sample. The first window reuses the earlier
-  whole-session distance record ID; all distance records use version 3 so a
-  re-export overwrites previous layouts (extra per-sample records from an
-  earlier export, if any, would not be removed). Export power measurements from
+  distance as the summary total. Each active
+  stretch is cut into fixed 10 s windows (2026-11-18), with the distance at each
+  boundary interpolated from the rower's cumulative readings, which update only
+  every ~1.7 s in irregular steps. Merging raw deltas into 60 s windows made
+  Strava's speed fall to 0 for the last minute; merging them into ~3.5 s windows
+  made it noisy (13-25 km/h) because a window held one or two counter steps.
+  Interpolated 10 s windows reduced the simulated noise on one workout from
+  ±6 to ±1.8 km/h and keep the real speed-up from ~19 to ~21 km/h visible
+  (how Strava places a record's distance in time is a hypothesis). The first
+  window reuses the earlier whole-session distance record ID; all distance
+  records use version 5 so a re-export overwrites previous layouts (extra
+  per-sample or per-window records from an earlier export, if any, would not
+  be removed). Export power measurements from
   locally stored samples only when their session state is active; pause,
   missing, invalid and out-of-session samples are excluded. Other raw samples
   remain local.

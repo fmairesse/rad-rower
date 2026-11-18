@@ -35,7 +35,7 @@ remain distinct. Linux experimentation tools continue to report raw values.
 The persistence and UI tests pass with simulated data on an Android 16
 emulator; the recording has not yet been tested on the real rower. Completed,
 non-partial workouts can now be exported on request to Health Connect as an
-indoor rowing session with distance windows (≤ 60 s) derived from cumulative readings
+indoor rowing session with distance windows (10 s, interpolated) derived from cumulative readings
 while active, active-calorie totals and timestamped power measurements
 recorded while active. Distance resets and pause samples are excluded.
 Permissions are requested only as needed and local recording remains

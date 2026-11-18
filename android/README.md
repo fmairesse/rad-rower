@@ -70,6 +70,18 @@ Health Connect must be installed and available on the device. Export behavior
 and permissions still need to be verified against a real Health Connect
 provider; local workout recording remains independent of Health Connect.
 
+To force a new export of existing workouts (for example to make Health Sync
+import them again), give them new IDs on a phone connected with `adb`. The
+script backs up the database first and needs a debug build:
+
+```sh
+android/tools/regenerate-workout-ids.py --dry-run   # preview
+android/tools/regenerate-workout-ids.py
+```
+
+Delete the old records from Health Connect (and the activity from Strava)
+beforehand, otherwise they will be duplicated.
+
 Build and run unit tests from the repository root:
 
 ```sh
