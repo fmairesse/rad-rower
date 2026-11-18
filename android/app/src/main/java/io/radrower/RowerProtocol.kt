@@ -161,5 +161,23 @@ internal object RowerProtocol {
         }
     }
 
-    data class Result(val body: ByteArray, val checksumOk: Boolean)
+    data class Result(val body: ByteArray, val checksumOk: Boolean) {
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (javaClass != other?.javaClass) return false
+
+            other as Result
+
+            if (checksumOk != other.checksumOk) return false
+            if (!body.contentEquals(other.body)) return false
+
+            return true
+        }
+
+        override fun hashCode(): Int {
+            var result = checksumOk.hashCode()
+            result = 31 * result + body.contentHashCode()
+            return result
+        }
+    }
 }

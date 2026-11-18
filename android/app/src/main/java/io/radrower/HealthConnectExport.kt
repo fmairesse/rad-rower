@@ -124,16 +124,16 @@ internal object HealthConnectExport {
         val endAt = workout.endedAt ?: return emptyList()
         var sessionState: Int? = null
         val activeSamples = sortedMapOf<Long, Double>()
-        for (sample in samples.sortedBy { it.sequence }) {
-            val metrics = JSONObject(sample.metricsJson)
+        for ((_, _, timestamp, _, metricsJson) in samples.sortedBy { it.sequence }) {
+            val metrics = JSONObject(metricsJson)
             if (metrics.has("sessionState") && !metrics.isNull("sessionState")) {
                 sessionState = metrics.optInt("sessionState", -1)
             }
-            if (sessionState != 2 || sample.timestamp !in startAt..endAt) continue
+            if (sessionState != 2 || timestamp !in startAt..endAt) continue
             val watts = metrics.opt("watts") as? Number ?: continue
             val value = watts.toDouble()
             if (value.isFinite() && value >= 0) {
-                activeSamples[sample.timestamp] = value
+                activeSamples[timestamp] = value
             }
         }
         return activeSamples.map { (timestamp, value) ->

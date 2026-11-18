@@ -36,6 +36,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
+import kotlin.time.Duration.Companion.milliseconds
 
 internal enum class ConnectionState { DISCONNECTED, SCANNING, CONNECTING, INITIALIZING, STREAMING }
 
@@ -174,7 +175,7 @@ internal class RowerConnection(
         }
     }
 
-    private suspend fun scan(): BluetoothDevice? = withTimeoutOrNull(12_000) {
+    private suspend fun scan(): BluetoothDevice? = withTimeoutOrNull(12_000.milliseconds) {
         val scanner = adapter?.bluetoothLeScanner ?: error("Bluetooth scanner is unavailable.")
         val found = CompletableDeferred<BluetoothDevice>()
         val callback = object : ScanCallback() {
@@ -287,7 +288,7 @@ internal class RowerConnection(
         suspend fun open(device: BluetoothDevice) {
             gatt = device.connectGatt(context, false, callback, BluetoothDevice.TRANSPORT_LE)
                 ?: error("Could not start the Bluetooth connection.")
-            if (withTimeoutOrNull(15_000) { connected.await(); true } == null) {
+            if (withTimeoutOrNull(15_000.milliseconds) { connected.await(); true } == null) {
                 error("Bluetooth connection timed out.")
             }
             val connection = requireNotNull(gatt)
@@ -323,7 +324,7 @@ internal class RowerConnection(
             pendingType = type
             try {
                 check(start()) { "Could not start Bluetooth $type." }
-                if (withTimeoutOrNull(5_000) { result.await(); true } == null) {
+                if (withTimeoutOrNull(5_000.milliseconds) { result.await(); true } == null) {
                     error("Bluetooth $type timed out.")
                 }
             } finally {
@@ -357,10 +358,10 @@ internal class RowerConnection(
             for (frames in RowerProtocol.setup) {
                 send(frames)
                 val deadline = SystemClock.elapsedRealtime() + 1_500
-                delay(150)
+                delay(150.milliseconds)
                 while (SystemClock.elapsedRealtime() < deadline &&
                     SystemClock.elapsedRealtime() - lastNotification < 150
-                ) delay(50)
+                ) delay(50.milliseconds)
             }
         }
 
@@ -369,14 +370,14 @@ internal class RowerConnection(
             while (scope.isActive) {
                 if (disconnected.isCompleted) error(disconnected.await())
                 send(RowerProtocol.poll[index++ % RowerProtocol.poll.size])
-                delay(600)
+                delay(600.milliseconds)
             }
         }
 
         suspend fun command(messages: List<List<ByteArray>>, expected: SessionState, required: Boolean = true) {
             val before = version
             send(messages.flatten())
-            val confirmed = withTimeoutOrNull(5_000) {
+            val confirmed = withTimeoutOrNull(5_000.milliseconds) {
                 sessionUpdates.first { update ->
                     update > before && mutableState.value.readings["sessionState"]?.value == expected.code
                 }

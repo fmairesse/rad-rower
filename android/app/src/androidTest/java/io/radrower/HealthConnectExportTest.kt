@@ -183,7 +183,7 @@ class HealthConnectExportTest {
             sample(3, workout.startedAt + 3_000, watts = 250),
             sample(4, workout.startedAt + 4_000, sessionState = 2, watts = 140),
             sample(5, workout.endedAt!!, sessionState = 4, watts = 0),
-            sample(6, workout.endedAt!! + 1_000, sessionState = 2, watts = 180),
+            sample(6, workout.endedAt + 1_000, sessionState = 2, watts = 180),
             sample(7, workout.startedAt + 5_000, sessionState = 2, watts = Double.NaN),
             sample(8, workout.startedAt + 6_000, sessionState = 2, watts = -1),
         )

@@ -17,6 +17,7 @@ import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import kotlin.time.Duration.Companion.milliseconds
 
 @RunWith(AndroidJUnit4::class)
 class WorkoutPersistenceTest {
@@ -38,8 +39,8 @@ class WorkoutPersistenceTest {
     }
 
     private suspend fun waitUntil(predicate: suspend () -> Boolean) {
-        withTimeout(10_000) {
-            while (!predicate()) delay(20)
+        withTimeout(10_000.milliseconds) {
+            while (!predicate()) delay(20.milliseconds)
         }
     }
 
@@ -166,7 +167,7 @@ class WorkoutPersistenceTest {
         waitUntil { dao.workouts().isNotEmpty() }
         failingDao.failWrites = true
         recorder.record(mapOf("watts" to 120))
-        val message = withTimeout(10_000) { recorder.error.first { it != null } }
+        val message = withTimeout(10_000.milliseconds) { recorder.error.first { it != null } }
         assertTrue(requireNotNull(message).contains("Workout storage failed"))
     }
 }

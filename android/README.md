@@ -1,8 +1,8 @@
 # Radrower Android
 
 The Android app displays ProForm Sport RL metrics and controls a session. It
-requires Android 8.0 (API 26) or newer and targets a Pixel 3a running Android
-12. The app scans for the first device advertising as `I_RW` when opened and
+requires Android 8.0 (API 26) or newer and targets a Pixel 3a running Android 12.
+The app scans for the first device advertising as `I_RW` when opened and
 Bluetooth permission is granted; no Bluetooth identifier is stored. Turn the
 rower on and disconnect other apps before opening Radrower. The scan stops
 after 12 seconds; use **Retry

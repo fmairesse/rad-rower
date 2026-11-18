@@ -1,10 +1,10 @@
 package io.radrower
 
 import android.os.SystemClock
-import androidx.compose.ui.test.assertIsNotEnabled
-import androidx.compose.ui.test.assertIsEnabled
-import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
@@ -20,8 +20,17 @@ class RowerScreenTest {
     @Test fun permissionIsRequestedFromScreen() {
         var requests = 0
         compose.setContent {
-            RowerScreen(RowerUiState(), false, false, true,
-                { requests++ }, {}, {}, {}, {})
+            RowerScreen(
+                RowerUiState(),
+                permissionGranted = false,
+                bluetoothEnabled = false,
+                bluetoothAvailable = true,
+                { requests++ },
+                {},
+                {},
+                {},
+                {},
+            )
         }
         compose.onNodeWithText("Bluetooth permission is required.").assertIsDisplayed()
         compose.onAllNodesWithText("Session").assertCountEquals(0)
@@ -37,9 +46,18 @@ class RowerScreenTest {
         val now = SystemClock.elapsedRealtime()
         compose.setContent {
             RowerScreen(
-                RowerUiState(ConnectionState.STREAMING,
-                    mapOf("sessionState" to Reading(2, now), "watts" to Reading(300, now))),
-                true, true, true, {}, {}, {}, { pauses++ }, { stops++ },
+                RowerUiState(
+                    ConnectionState.STREAMING,
+                    mapOf("sessionState" to Reading(2, now), "watts" to Reading(300, now)),
+                ),
+                permissionGranted = true,
+                bluetoothEnabled = true,
+                bluetoothAvailable = true,
+                onPermission = {},
+                onEnableBluetooth = {},
+                onRetry = {},
+                onToggle = { pauses++ },
+                onStop = { stops++ },
             )
         }
         compose.onNodeWithText("Connected to I_RW").assertIsDisplayed()
@@ -56,9 +74,18 @@ class RowerScreenTest {
     @Test fun staleSessionDisablesCommands() {
         compose.setContent {
             RowerScreen(
-                RowerUiState(ConnectionState.STREAMING,
-                    mapOf("sessionState" to Reading(2, SystemClock.elapsedRealtime() - 6_000))),
-                true, true, true, {}, {}, {}, {}, {},
+                RowerUiState(
+                    ConnectionState.STREAMING,
+                    mapOf("sessionState" to Reading(2, SystemClock.elapsedRealtime() - 6_000)),
+                ),
+                permissionGranted = true,
+                bluetoothEnabled = true,
+                bluetoothAvailable = true,
+                onPermission = {},
+                onEnableBluetooth = {},
+                onRetry = {},
+                onToggle = {},
+                onStop = {},
             )
         }
         compose.onNodeWithText("State unavailable").assertIsDisplayed()
