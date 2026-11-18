@@ -108,19 +108,25 @@ conversation. Si un choix change, indiquer quelle décision le remplace.
 ## D008 - Export completed Android workouts to Health Connect
 
 - Date: 2026-11-16.
-- Status: implemented, including measured power samples on 2026-11-17; a real
-  Health Connect provider has not yet been tested.
+- Status: implemented, including measured power and distance intervals on
+  2026-11-17; a real Health Connect provider has not yet been tested.
 - Decision: offer a user-triggered export from workout history for completed,
   non-partial workouts only. Write an indoor rowing `ExerciseSessionRecord`
-  and, when available, the rower-reported distance and active calories, plus
-  the timestamped measured power series while actively rowing.
+  and, when available, active calories, distance intervals derived from the
+  rower's cumulative readings, plus the timestamped measured power series
+  while actively rowing.
 - Reason: make the already-persisted local summary available to fitness apps
   without making Health Connect a prerequisite for recording.
 - Privacy and retries: request only the write permissions needed for a
   workout's available metrics; never read Health Connect records. Use stable
-  client record IDs and version 1 for each record so retrying the same
-  immutable workout does not create a second copy. Export power measurements
-  from locally stored samples only when their session state is active; pause,
+  client record IDs and versions so retrying the same immutable workout does
+  not create a second copy. Derive distance deltas only
+  between monotonic readings in active session state, and split records around
+  pauses; disregard counter decreases and pause values. Preserve the previous
+  distance as the summary total. The first interval reuses the previous
+  whole-session distance record ID at version 2, replacing that export when
+  workouts are re-exported after this change. Export power measurements from
+  locally stored samples only when their session state is active; pause,
   missing, invalid and out-of-session samples are excluded. Other raw samples
   remain local.
 - Limits: availability, consent UI, permissions and remote write behavior
@@ -131,5 +137,6 @@ conversation. Si un choix change, indiquer quelle décision le remplace.
   may still be unavailable on some devices running API 26 or 27.
 - Source: [Health Connect write data](https://developer.android.com/health-and-fitness/health-connect/write-data),
   [exercise sessions](https://developer.android.com/reference/kotlin/androidx/health/connect/client/records/ExerciseSessionRecord),
+  [distance records](https://developer.android.com/reference/kotlin/androidx/health/connect/client/records/DistanceRecord),
   [power records](https://developer.android.com/reference/kotlin/androidx/health/connect/client/records/PowerRecord),
   [AndroidX release notes](https://developer.android.com/jetpack/androidx/releases/health-connect).

@@ -22,18 +22,23 @@ Workouts and timestamped samples are now stored locally in Room/SQLite, with
 interrupted-workout recovery and storage errors displayed in the dashboard.
 The dashboard links to a separate workout history listing all saved sessions
 with start date/time, rower-reported elapsed time, distance, calories and status.
+Average speed and pace use the rower's cumulative distance and active elapsed
+time, and are omitted for partial or incomplete measurements. An observed idle
+state distinguishes an app-started workout from a session first detected in
+progress.
 The Android screen-on flag follows the last reported active session state
 while streaming, and is cleared on pause, stop or disconnection. Stale readings
 do not release it before the connection is lost or another state arrives.
 The persistence and UI tests pass with simulated data on an Android 16
 emulator; the recording has not yet been tested on the real rower. Completed,
 non-partial workouts can now be exported on request to Health Connect as an
-indoor rowing session with available distance, active-calorie totals and
-timestamped power measurements recorded while active. Pause samples are
-excluded. Permissions are requested only as needed and local recording
-remains independent. Health Connect availability, permission UX and writes
-still need validation with a real provider. See `android/README.md` for
-operation and limitations.
+indoor rowing session with distance intervals derived from cumulative readings
+while active, active-calorie totals and timestamped power measurements
+recorded while active. Distance resets and pause samples are excluded.
+Permissions are requested only as needed and local recording remains
+independent. Health Connect availability, permission UX and writes still need
+validation with a real provider. See `android/README.md` for operation and
+limitations.
 
 `bleak/02-connection.py` maintient la connexion avec le rameur (validé par
 l’utilisateur le 2026-11-14) : initialisation de 25 écritures puis poll

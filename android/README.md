@@ -38,24 +38,30 @@ history** on the dashboard to see all workouts, newest first, with their start
 date and time, duration, distance and calories. Duration is the elapsed time
 reported by the rower; unavailable values are shown as a dash. Recording,
 interrupted and partial workouts remain visible with their status.
+Average speed and pace are calculated from the rower's cumulative distance and
+active elapsed time for complete workouts when both measurements are available.
 
 An active workout is marked **interrupted** when the connection is lost or the
 app leaves the foreground. After an unexpected process termination, unfinished
 workouts are marked interrupted on the next launch using their last saved
-sample time. A workout first observed after it started is marked **partial**.
+sample time. A workout first observed in progress without a preceding idle
+state is marked **partial**; a session started after the app observed idle is
+not partial even if its first active reading arrives a few seconds later.
 No measurements are inferred for missing intervals; a sudden shutdown may lose
 pending writes. Storage errors are displayed on the dashboard. Android's
 configured app backup behavior also applies to the database.
 
 Completed, non-partial workouts can be exported from **Workout history** to
 Health Connect. Export is always initiated by the user. Radrower writes an
-indoor rowing exercise session and, when reported by the rower, its distance
-and active calories, plus measured power samples recorded while the workout
-was active. Power samples from pauses, missing values and invalid values are
-omitted. Other raw telemetry is not exported. Radrower does not read Health
-Connect data. Health Connect permissions are requested only when needed;
-export errors are shown in the history. Repeating an export uses stable client
-record IDs to avoid creating another copy of the same workout.
+indoor rowing exercise session, distance intervals derived from the rower's
+cumulative distance readings while active, active calories, and measured
+power samples recorded while the workout was active. Distance counter resets
+and readings during pauses are not counted as distance. Power samples from
+pauses, missing values and invalid values are omitted. Other raw telemetry is
+not exported. Radrower does not read Health Connect data. Health Connect
+permissions are requested only when needed; export errors are shown in the
+history. Repeating an export uses stable client record IDs to avoid creating
+another copy of the same workout.
 
 Health Connect must be installed and available on the device. Export behavior
 and permissions still need to be verified against a real Health Connect

@@ -25,7 +25,7 @@ internal object HealthConnectExport {
 
     fun permissionsFor(workout: Workout, samples: List<WorkoutSample> = emptyList()): Set<String> = buildSet {
         add(HealthPermission.getWritePermission(ExerciseSessionRecord::class))
-        if (workout.distance.isPositiveFinite()) {
+        if (distanceIntervals(workout, samples).isNotEmpty()) {
             add(HealthPermission.getWritePermission(DistanceRecord::class))
         }
         if (workout.calories.isPositiveFinite()) {
@@ -58,14 +58,18 @@ internal object HealthConnectExport {
                 metadata = metadata(sessionId),
             ),
         )
-        workout.distance.takeIf { it.isPositiveFinite() }?.let { distance ->
+        distanceIntervals(workout, samples).forEachIndexed { index, interval ->
             records += DistanceRecord(
-                startTime = start,
-                startZoneOffset = startOffset,
-                endTime = end,
-                endZoneOffset = endOffset,
-                distance = distance.meters,
-                metadata = metadata("radrower:${workout.id}:distance"),
+                startTime = Instant.ofEpochMilli(interval.start.timestamp),
+                startZoneOffset = ZoneOffset.ofTotalSeconds(interval.start.offsetSeconds),
+                endTime = Instant.ofEpochMilli(interval.end.timestamp),
+                endZoneOffset = ZoneOffset.ofTotalSeconds(interval.end.offsetSeconds),
+                distance = interval.meters.meters,
+                metadata = metadata(
+                    if (index == 0) "radrower:${workout.id}:distance"
+                    else "radrower:${workout.id}:distance:$index",
+                    clientRecordVersion = if (index == 0) 2 else 1,
+                ),
             )
         }
         workout.calories.takeIf { it.isPositiveFinite() }?.let { calories ->
@@ -127,10 +131,41 @@ internal object HealthConnectExport {
         }
     }
 
-    private fun metadata(clientRecordId: String) = Metadata.activelyRecorded(
+    private data class DistanceInterval(
+        val start: WorkoutSample,
+        val end: WorkoutSample,
+        val meters: Double,
+    )
+
+    private fun distanceIntervals(workout: Workout, samples: List<WorkoutSample>): List<DistanceInterval> {
+        val endAt = workout.endedAt ?: return emptyList()
+        var sessionState: Int? = null
+        var previous: Pair<WorkoutSample, Double>? = null
+        val intervals = mutableListOf<DistanceInterval>()
+        for (sample in samples.sortedBy { it.sequence }) {
+            val metrics = JSONObject(sample.metricsJson)
+            if (metrics.has("sessionState") && !metrics.isNull("sessionState")) {
+                sessionState = metrics.optInt("sessionState", -1)
+                if (sessionState != 2) previous = null
+            }
+            if (sessionState != 2 || sample.timestamp !in workout.startedAt..endAt) continue
+            val distance = (metrics.opt("distance") as? Number)?.toDouble()
+                ?.takeIf { it.isFinite() && it >= 0 } ?: continue
+            val earlier = previous
+            if (earlier != null && sample.timestamp > earlier.first.timestamp && distance > earlier.second) {
+                intervals += DistanceInterval(earlier.first, sample, distance - earlier.second)
+            }
+            if (earlier == null || distance >= earlier.second) {
+                previous = sample to distance
+            }
+        }
+        return intervals
+    }
+
+    private fun metadata(clientRecordId: String, clientRecordVersion: Long = 1) = Metadata.activelyRecorded(
         device = Device(type = Device.TYPE_PHONE),
         clientRecordId = clientRecordId,
-        clientRecordVersion = 1,
+        clientRecordVersion = clientRecordVersion,
     )
 
     private fun Double?.isPositiveFinite(): Boolean = this != null && isFinite() && this > 0

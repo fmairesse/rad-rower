@@ -39,12 +39,17 @@ class HealthConnectExportTest {
         timestamp: Long,
         sessionState: Int? = null,
         watts: Number? = null,
+        distance: Number? = null,
     ): WorkoutSample {
         val entries = buildList {
             sessionState?.let { add("\"sessionState\":$it") }
             watts?.let {
                 val value = it.toDouble()
                 add("\"watts\":${if (value.isFinite()) value else "\"NaN\""}")
+            }
+            distance?.let {
+                val value = it.toDouble()
+                add("\"distance\":${if (value.isFinite()) value else "\"NaN\""}")
             }
         }
         return WorkoutSample(
@@ -61,26 +66,71 @@ class HealthConnectExportTest {
         val workout = workout()
         val records = HealthConnectExport.records(workout)
 
-        assertEquals(3, records.size)
+        assertEquals(2, records.size)
         val session = records[0] as ExerciseSessionRecord
         assertEquals(ExerciseSessionRecord.EXERCISE_TYPE_ROWING_MACHINE, session.exerciseType)
         assertEquals(Instant.ofEpochMilli(workout.startedAt), session.startTime)
         assertEquals(Instant.ofEpochMilli(requireNotNull(workout.endedAt)), session.endTime)
         assertEquals("Indoor rowing", session.title)
         assertEquals("radrower:workout-id:exercise", session.metadata.clientRecordId)
-        assertEquals("radrower:workout-id:distance", (records[1] as DistanceRecord).metadata.clientRecordId)
         assertEquals(
             "radrower:workout-id:active-calories",
-            (records[2] as ActiveCaloriesBurnedRecord).metadata.clientRecordId,
+            (records[1] as ActiveCaloriesBurnedRecord).metadata.clientRecordId,
         )
         assertEquals(
             setOf(
                 "android.permission.health.WRITE_EXERCISE",
-                "android.permission.health.WRITE_DISTANCE",
                 "android.permission.health.WRITE_ACTIVE_CALORIES_BURNED",
             ),
             HealthConnectExport.permissionsFor(workout),
         )
+    }
+
+    @Test
+    fun exportsDistanceAsNonOverlappingActiveIntervalDeltas() {
+        val workout = workout(distance = 150.0)
+        val samples = listOf(
+            sample(0, workout.startedAt, sessionState = 2, distance = 0),
+            sample(1, workout.startedAt + 1_000, distance = 100),
+            sample(2, workout.startedAt + 2_000, sessionState = 3, distance = 0),
+            sample(3, workout.startedAt + 3_000, distance = 0),
+            sample(4, workout.startedAt + 4_000, sessionState = 2, distance = 100),
+            sample(5, workout.startedAt + 5_000, distance = 150),
+            sample(6, workout.endedAt!!, sessionState = 4, distance = 0),
+        )
+
+        val records = HealthConnectExport.records(workout, samples)
+        val distances = records.filterIsInstance<DistanceRecord>()
+
+        assertEquals(2, distances.size)
+        assertEquals(
+            listOf(
+                workout.startedAt to workout.startedAt + 1_000,
+                workout.startedAt + 4_000 to workout.startedAt + 5_000,
+            ),
+            distances.map { it.startTime.toEpochMilli() to it.endTime.toEpochMilli() },
+        )
+        assertEquals(listOf(100.0, 50.0), distances.map { it.distance.inMeters })
+        assertEquals(
+            listOf("radrower:workout-id:distance", "radrower:workout-id:distance:1"),
+            distances.map { it.metadata.clientRecordId },
+        )
+        assertEquals(2L, distances.first().metadata.clientRecordVersion)
+        assertEquals(1L, distances.last().metadata.clientRecordVersion)
+        assertEquals(150.0, distances.sumOf { it.distance.inMeters }, 0.0)
+        assertTrue("android.permission.health.WRITE_DISTANCE" in HealthConnectExport.permissionsFor(workout, samples))
+    }
+
+    @Test
+    fun doesNotInferDistanceFromSummaryWithoutActiveSamples() {
+        val workout = workout(distance = 500.0)
+        val samples = listOf(
+            sample(0, workout.startedAt, sessionState = 3, distance = 500),
+            sample(1, workout.startedAt + 1_000, distance = 550),
+        )
+
+        assertTrue(HealthConnectExport.records(workout, samples).none { it is DistanceRecord })
+        assertFalse("android.permission.health.WRITE_DISTANCE" in HealthConnectExport.permissionsFor(workout, samples))
     }
 
     @Test
