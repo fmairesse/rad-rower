@@ -115,7 +115,7 @@ test("decodes motion, zero pace and little-endian stroke count", () => {
 test("handles unset, unknown and all validated resistance encodings without inventing levels", () => {
   const body = telemetryBody();
   body[9] = 0;
-  assert.equal(decodeMessage(body).resistance, null);
+  assert.equal(decodeMessage(body).resistance, 1);
   body[9] = 0xff;
   assert.equal(decodeMessage(body).resistance, "? 0xff");
   const rawLevels = [

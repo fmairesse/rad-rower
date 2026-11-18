@@ -129,7 +129,7 @@ export function decodeMessage(body) {
     const values = {
       watts,
       distance: u16(body, 12),
-      resistance: body[9] === 0 ? null :
+      resistance: body[9] === 0 ? 1 :
         (RESISTANCE_LEVELS.get(body[9]) ?? `? 0x${body[9].toString(16).padStart(2, "0")}`),
     };
     if (body[3] === 0x2e) {

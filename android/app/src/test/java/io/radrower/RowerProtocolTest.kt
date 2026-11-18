@@ -103,8 +103,11 @@ class RowerProtocolTest {
         val body = telemetry()
         body[9] = 0xff.toByte()
         assertEquals("? 0xff", requireNotNull(RowerProtocol.decodeMessage(body))["resistance"])
+        body[9] = 0
+        assertEquals(1, requireNotNull(RowerProtocol.decodeMessage(body))["resistance"])
         body.fill(0xff.toByte(), 10, 18)
         assertNull(requireNotNull(RowerProtocol.decodeMessage(body))["watts"])
+        assertNull(requireNotNull(RowerProtocol.decodeMessage(body))["resistance"])
     }
 
     @Test fun commandsHaveExpectedFrameCounts() {

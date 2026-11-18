@@ -84,7 +84,8 @@ reconstruct cumulative distance or calories for display from earlier readings.
   the intermediate end state is optional, as in the Python script. A failed
   required confirmation stops the sequence; check the console before retrying.
   No resistance command is included.
-- A zero resistance byte means **unknown**, not level zero. Unknown nonzero
+- A zero resistance byte (not yet reported by the rower) is **assumed to be
+  level 1**, a user-chosen assumption rather than a measurement. Unknown nonzero
   encodings are shown as hexadecimal rather than guessed. A zero pace is
   unavailable; the derived speed is zero.
 - Messages with the all-`ff` no-data sentinel clear the corresponding values.

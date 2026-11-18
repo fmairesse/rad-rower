@@ -153,3 +153,15 @@ conversation. Si un choix change, indiquer quelle décision le remplace.
   [distance records](https://developer.android.com/reference/kotlin/androidx/health/connect/client/records/DistanceRecord),
   [power records](https://developer.android.com/reference/kotlin/androidx/health/connect/client/records/PowerRecord),
   [AndroidX release notes](https://developer.android.com/jetpack/androidx/releases/health-connect).
+
+## D009 - Assume resistance level 1 when unset
+
+- Date: 2026-11-18.
+- Status: adopted.
+- Decision: interpret resistance byte `0` in Android and web telemetry as
+  resistance level 1. Keep fully unavailable telemetry and unknown nonzero encodings
+  distinct.
+- Reason: the user requested a usable default when the rower has not reported
+  a resistance level; level 1 is the chosen assumption, not a measured value.
+- Scope: Android and web. Linux experimentation tools continue to report the raw
+  observation.

@@ -164,7 +164,7 @@ octets 4 à avant-dernier, modulo 256.
 | --- | --- | --- | --- |
 | puissance (W) | message de 50 octets, corps | 10–11 LE | |
 | distance (m) | message de 50 octets, corps | 12–13 LE | |
-| résistance (niveau 1–24) | message de 50 octets, corps | 9, table de QZ | l’octet vaut 0 tant que la résistance n’a pas été changée sur le rameur (niveau inconnu) ; 1 après réglage |
+| résistance (niveau 1–24) | message de 50 octets, corps | 9, table de QZ | l’octet vaut 0 tant que la résistance n’a pas été changée sur le rameur (niveau inconnu) ; 1 après réglage. Par choix utilisateur, l’application Android et l’interface web interprètent désormais cet octet 0 comme le niveau supposé 1 ; les outils d’expérimentation conservent la valeur observée. |
 | cadence (coups/min) | trame `ff 11` | 12 | |
 | nombre de coups | trame `ff 11` | 10–11 LE | trouvé sur notre rameur, absent de QZ ; 36 → 37 sur l’essai suivant |
 | allure (s pour 500 m) | trame `ff 11` | 13–14 LE | 275 s = 4:35 ; 330 s = 5:30 |

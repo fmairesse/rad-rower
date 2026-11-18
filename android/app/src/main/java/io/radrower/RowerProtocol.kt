@@ -80,7 +80,7 @@ internal object RowerProtocol {
             val values = mutableMapOf<String, Any?>(
                 "watts" to watts,
                 "distance" to body.u16(12),
-                "resistance" to if (raw == 0) null else resistanceLevels[raw] ?: "? 0x%02x".format(raw),
+                "resistance" to if (raw == 0) 1 else resistanceLevels[raw] ?: "? 0x%02x".format(raw),
             )
             if (body.u8(3) == 0x2e) {
                 values.putAll(mapOf(

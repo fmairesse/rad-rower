@@ -26,6 +26,9 @@ out of date.
 
 The protocol is based on the verified Linux experiments documented in
 [`docs/protocole-ble.md`](../docs/protocole-ble.md) and the web implementation.
+When a telemetry message reports resistance byte `0` (not yet configured),
+Android assumes level 1. Fully unavailable telemetry and unknown nonzero
+encodings are still reported as unavailable or unknown.
 On 2026-11-16 the user reported a successful test of the Android app; the phone
 and exact test conditions were not specified. The first matching `I_RW` is
 selected, so avoid running the app near multiple machines with that name.

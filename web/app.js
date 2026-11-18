@@ -132,7 +132,6 @@ if (!globalThis.Vue) {
         return {
           key, label, unit, value: display, stale: Boolean(isStale(key)),
           note: !received ? "Waiting for data" : isStale(key) ? "Last value · not up to date" :
-            key === "resistance" && value == null ? "Level not reported by the rower" :
             key === "speed" ? "Calculated from pace" :
             key === "caloriesPerHour" ? "Estimated from power" :
             ["paused", "averagePace", "averageWatts"].includes(key) ? "Likely interpretation, not yet confirmed" :

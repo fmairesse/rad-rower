@@ -29,6 +29,9 @@ progress.
 The Android screen-on flag follows the last reported active session state
 while streaming, and is cleared on pause, stop or disconnection. Stale readings
 do not release it before the connection is lost or another state arrives.
+Android and the web interface now assume resistance level 1 when a telemetry message reports raw
+resistance byte 0; fully unavailable telemetry and unknown nonzero encodings
+remain distinct. Linux experimentation tools continue to report raw values.
 The persistence and UI tests pass with simulated data on an Android 16
 emulator; the recording has not yet been tested on the real rower. Completed,
 non-partial workouts can now be exported on request to Health Connect as an
