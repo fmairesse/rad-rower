@@ -338,13 +338,15 @@ internal fun RowerScreen(
                     if (state.controlling) Text("Waiting for the rower to confirm…")
                 }
             }
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Workouts", style = MaterialTheme.typography.titleLarge)
-                    storageError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                    if (workouts != null) Text("${workouts.size} saved on this device")
-                    else if (storageError == null) Text("Loading workouts…")
-                    OutlinedButton(onClick = onHistory) { Text("View workout history") }
+            if (sessionState != 2) {
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Workouts", style = MaterialTheme.typography.titleLarge)
+                        storageError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                        if (workouts != null) Text("${workouts.size} saved on this device")
+                        else if (storageError == null) Text("Loading workouts…")
+                        OutlinedButton(onClick = onHistory) { Text("View workout history") }
+                    }
                 }
             }
             if (sessionState == 2) {
