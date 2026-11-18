@@ -347,24 +347,26 @@ internal fun RowerScreen(
                     OutlinedButton(onClick = onHistory) { Text("View workout history") }
                 }
             }
-            Text("Live metrics", style = MaterialTheme.typography.titleLarge)
-            metrics.forEach { definition ->
-                val reading = state.readings[definition.key]
-                val stale = reading != null &&
-                    (state.connection != ConnectionState.STREAMING || now - reading.receivedAt > 5_000)
-                Card(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(16.dp)) {
-                        Text(definition.label, style = MaterialTheme.typography.labelLarge)
-                        Text("${formatMetric(definition.key, reading?.value)} ${definition.unit}",
-                            style = MaterialTheme.typography.headlineSmall)
-                        Text(when {
-                            reading == null -> "Waiting for data"
-                            stale -> "Last value · not up to date"
-                            reading.value == null && definition.key == "resistance" -> "Level not reported by the rower"
-                            reading.value == null -> "Value unavailable"
-                            definition.note.isNotEmpty() -> definition.note
-                            else -> "Data from the rower"
-                        }, style = MaterialTheme.typography.bodySmall)
+            if (sessionState == 2) {
+                Text("Live metrics", style = MaterialTheme.typography.titleLarge)
+                metrics.forEach { definition ->
+                    val reading = state.readings[definition.key]
+                    val stale = reading != null &&
+                        (state.connection != ConnectionState.STREAMING || now - reading.receivedAt > 5_000)
+                    Card(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(16.dp)) {
+                            Text(definition.label, style = MaterialTheme.typography.labelLarge)
+                            Text("${formatMetric(definition.key, reading?.value)} ${definition.unit}",
+                                style = MaterialTheme.typography.headlineSmall)
+                            Text(when {
+                                reading == null -> "Waiting for data"
+                                stale -> "Last value · not up to date"
+                                reading.value == null && definition.key == "resistance" -> "Level not reported by the rower"
+                                reading.value == null -> "Value unavailable"
+                                definition.note.isNotEmpty() -> definition.note
+                                else -> "Data from the rower"
+                            }, style = MaterialTheme.typography.bodySmall)
+                        }
                     }
                 }
             }
@@ -372,10 +374,38 @@ internal fun RowerScreen(
     }
 }
 
-@Preview(showSystemUi = true)
+@Preview(name = "Workout not started", showSystemUi = true)
 @Composable
-private fun RowerScreenPreview() {
+private fun RowerScreenIdlePreview() {
     val now = SystemClock.elapsedRealtime()
+    RadRowerTheme {
+        RowerScreen(
+            state = RowerUiState(
+                connection = ConnectionState.STREAMING,
+                readings = mapOf("sessionState" to Reading(1, now)),
+            ),
+            permissionGranted = true,
+            bluetoothEnabled = true,
+            bluetoothAvailable = true,
+            onPermission = {},
+            onEnableBluetooth = {},
+            onRetry = {},
+            onToggle = {},
+            onStop = {},
+        )
+    }
+}
+
+@Preview(name = "Workout in progress", showSystemUi = true)
+@Composable
+private fun RowerScreenActiveWorkoutPreview() {
+    var now by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            now = SystemClock.elapsedRealtime()
+            delay(1_000)
+        }
+    }
     RadRowerTheme {
         RowerScreen(
             state = RowerUiState(
