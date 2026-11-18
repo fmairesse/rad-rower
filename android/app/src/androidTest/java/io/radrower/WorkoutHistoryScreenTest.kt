@@ -133,6 +133,7 @@ class WorkoutHistoryScreenTest {
         compose.onNodeWithText("Back to dashboard").performClick()
         compose.onNodeWithText("RADROWER").assertIsDisplayed()
         compose.onNodeWithText("View workout history").performScrollTo().performClick()
+        compose.onNodeWithText("Workout history").assertIsDisplayed()
         InstrumentationRegistry.getInstrumentation().runOnMainSync {
             InstrumentationRegistry.getInstrumentation().uiAutomation.performGlobalAction(
                 android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK,

@@ -12,13 +12,17 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
@@ -34,6 +38,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
@@ -277,18 +282,18 @@ private data class MetricDefinition(
 private val metrics =
     listOf(
         MetricDefinition("watts", "Power", "W"),
-        MetricDefinition("pace", "Pace", "/ 500 m"),
-        MetricDefinition("averagePace", "Average pace", "/ 500 m", "Interpretation not yet confirmed"),
-        MetricDefinition("cadence", "Cadence", "strokes/min"),
+        MetricDefinition("elapsed", "Elapsed time", ""),
         MetricDefinition("distance", "Distance", "m"),
+        MetricDefinition("pace", "Pace", "/ 500 m"),
+        MetricDefinition("averagePace", "Average pace", "/ 500 m", ""),
+        MetricDefinition("cadence", "Cadence", "str/min"),
         MetricDefinition("strokes", "Stroke count", "strokes"),
         MetricDefinition("speed", "Speed", "km/h", "Calculated from pace"),
         MetricDefinition("resistance", "Resistance", "/ 24"),
-        MetricDefinition("elapsed", "Elapsed time", ""),
-        MetricDefinition("paused", "Paused time", "", "Interpretation not yet confirmed"),
+        MetricDefinition("paused", "Paused time", "", ""),
         MetricDefinition("calories", "Calories", "kcal"),
         MetricDefinition("caloriesPerHour", "Estimated burn", "kcal/h", "Estimated from power"),
-        MetricDefinition("averageWatts", "Average power", "W", "Interpretation not yet confirmed"),
+        MetricDefinition("averageWatts", "Average power", "W", ""),
     )
 
 @Composable
@@ -340,114 +345,130 @@ internal fun RowerScreen(
             }
         }
     Scaffold { padding ->
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .verticalScroll(rememberScrollState())
-                    .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text("RADROWER", style = MaterialTheme.typography.headlineMedium)
-            Text("ProForm Sport RL", style = MaterialTheme.typography.titleMedium)
-            if (state.connection != ConnectionState.STREAMING || sessionState != SessionState.IN_PROGRESS) {
-                Card(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(status, style = MaterialTheme.typography.titleMedium)
-                        Text("Keep the app in the foreground. The rower must be on and disconnected from other apps.")
-                        if (!permissionGranted && bluetoothAvailable) {
-                            Button(onClick = onPermission) { Text("Allow Bluetooth") }
-                        } else if (!bluetoothEnabled && bluetoothAvailable) {
-                            Button(onClick = onEnableBluetooth) { Text("Turn on Bluetooth") }
-                        } else if (state.connection == ConnectionState.DISCONNECTED && bluetoothAvailable) {
-                            Button(onClick = onRetry) { Text("Retry connection") }
+        BoxWithConstraints(Modifier.fillMaxSize().padding(padding)) {
+            val spacing = 12.dp
+            val availableWidth = maxWidth - 32.dp
+            val columns = maxOf(2, ((availableWidth + spacing) / (160.dp + spacing)).toInt())
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(columns),
+                modifier = Modifier.fillMaxSize().testTag("dashboardGrid"),
+                contentPadding = PaddingValues(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(spacing),
+                verticalArrangement = Arrangement.spacedBy(spacing),
+            ) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Text("RADROWER", style = MaterialTheme.typography.headlineMedium)
+                }
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Text("ProForm Sport RL", style = MaterialTheme.typography.titleMedium)
+                }
+                if (state.connection != ConnectionState.STREAMING || sessionState != SessionState.IN_PROGRESS) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        Card(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(status, style = MaterialTheme.typography.titleMedium)
+                                Text("Keep the app in the foreground. The rower must be on and disconnected from other apps.")
+                                if (!permissionGranted && bluetoothAvailable) {
+                                    Button(onClick = onPermission) { Text("Allow Bluetooth") }
+                                } else if (!bluetoothEnabled && bluetoothAvailable) {
+                                    Button(onClick = onEnableBluetooth) { Text("Turn on Bluetooth") }
+                                } else if (state.connection == ConnectionState.DISCONNECTED && bluetoothAvailable) {
+                                    Button(onClick = onRetry) { Text("Retry connection") }
+                                }
+                                state.message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                            }
                         }
-                        state.message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                     }
                 }
-            }
-            if (state.connection == ConnectionState.STREAMING) {
-                Card(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Session", style = MaterialTheme.typography.titleLarge)
-                        Text(
-                            when (sessionState) {
-                                SessionState.IDLE -> "Idle"
-                                SessionState.IN_PROGRESS -> "In progress"
-                                SessionState.PAUSED -> "Paused"
-                                SessionState.FINISHED -> "Finished"
-                                null -> "State unavailable"
-                            },
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(
-                                onClick = onToggle,
-                                enabled =
-                                    ready && sessionState in listOf(SessionState.IDLE, SessionState.IN_PROGRESS, SessionState.PAUSED),
-                            ) {
+                if (state.connection == ConnectionState.STREAMING) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        Card(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("Session", style = MaterialTheme.typography.titleLarge)
                                 Text(
                                     when (sessionState) {
-                                        SessionState.IN_PROGRESS -> "Pause"
-                                        SessionState.PAUSED -> "Resume"
-                                        else -> "Start"
+                                        SessionState.IDLE -> "Idle"
+                                        SessionState.IN_PROGRESS -> "In progress"
+                                        SessionState.PAUSED -> "Paused"
+                                        SessionState.FINISHED -> "Finished"
+                                        null -> "State unavailable"
                                     },
                                 )
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Button(
+                                        onClick = onToggle,
+                                        enabled =
+                                            ready &&
+                                                sessionState in listOf(SessionState.IDLE, SessionState.IN_PROGRESS, SessionState.PAUSED),
+                                    ) {
+                                        Text(
+                                            when (sessionState) {
+                                                SessionState.IN_PROGRESS -> "Pause"
+                                                SessionState.PAUSED -> "Resume"
+                                                else -> "Start"
+                                            },
+                                        )
+                                    }
+                                    OutlinedButton(
+                                        onClick = onStop,
+                                        enabled =
+                                            ready && sessionState in listOf(SessionState.IN_PROGRESS, SessionState.PAUSED),
+                                    ) {
+                                        Text("Stop")
+                                    }
+                                }
+                                if (state.controlling) Text("Waiting for the rower to confirm…")
+                                if (sessionState == SessionState.IN_PROGRESS) {
+                                    state.message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                                }
                             }
-                            OutlinedButton(
-                                onClick = onStop,
-                                enabled =
-                                    ready && sessionState in listOf(SessionState.IN_PROGRESS, SessionState.PAUSED),
-                            ) {
-                                Text("Stop")
-                            }
-                        }
-                        if (state.controlling) Text("Waiting for the rower to confirm…")
-                        if (sessionState == SessionState.IN_PROGRESS) {
-                            state.message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                         }
                     }
                 }
-            }
-            if (sessionState != SessionState.IN_PROGRESS) {
-                Card(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("Workouts", style = MaterialTheme.typography.titleLarge)
-                        storageError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                        if (workouts != null) {
-                            Text("${workouts.size} saved on this device")
-                        } else if (storageError == null) {
-                            Text("Loading workouts…")
+                if (sessionState != SessionState.IN_PROGRESS) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        Card(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text("Workouts", style = MaterialTheme.typography.titleLarge)
+                                storageError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                                if (workouts != null) {
+                                    Text("${workouts.size} saved on this device")
+                                } else if (storageError == null) {
+                                    Text("Loading workouts…")
+                                }
+                                OutlinedButton(onClick = onHistory) { Text("View workout history") }
+                            }
                         }
-                        OutlinedButton(onClick = onHistory) { Text("View workout history") }
                     }
                 }
-            }
-            if (sessionState == SessionState.IN_PROGRESS) {
-                Text("Live metrics", style = MaterialTheme.typography.titleLarge)
-                metrics.forEach { definition ->
-                    val reading = state.readings[definition.key]
-                    val stale =
-                        reading != null &&
-                            (state.connection != ConnectionState.STREAMING || now - reading.receivedAt > 5_000)
-                    Card(Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(16.dp)) {
-                            Text(definition.label, style = MaterialTheme.typography.labelLarge)
-                            Text(
-                                "${formatMetric(definition.key, reading?.value)} ${definition.unit}",
-                                style = MaterialTheme.typography.headlineSmall,
-                            )
-                            Text(
-                                when {
-                                    reading == null -> "Waiting for data"
-                                    stale -> "Last value · not up to date"
-                                    reading.value == null && definition.key == "resistance" -> "Level not reported by the rower"
-                                    reading.value == null -> "Value unavailable"
-                                    definition.note.isNotEmpty() -> definition.note
-                                    else -> "Data from the rower"
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                            )
+                if (sessionState == SessionState.IN_PROGRESS) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        Text("Live metrics", style = MaterialTheme.typography.titleLarge)
+                    }
+                    items(metrics, key = { it.key }) { definition ->
+                        val reading = state.readings[definition.key]
+                        val stale =
+                            reading != null &&
+                                (state.connection != ConnectionState.STREAMING || now - reading.receivedAt > 5_000)
+                        Card(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(16.dp)) {
+                                Text(definition.label, style = MaterialTheme.typography.labelLarge)
+                                Text(
+                                    "${formatMetric(definition.key, reading?.value)} ${definition.unit}",
+                                    style = MaterialTheme.typography.headlineSmall,
+                                )
+                                Text(
+                                    when {
+                                        reading == null -> "Waiting for data"
+                                        stale -> "Last value · not up to date"
+                                        reading.value == null && definition.key == "resistance" -> "Level not reported by the rower"
+                                        reading.value == null -> "Value unavailable"
+                                        definition.note.isNotEmpty() -> definition.note
+                                        else -> "Data from the rower"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
                         }
                     }
                 }

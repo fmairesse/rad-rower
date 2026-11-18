@@ -1,19 +1,26 @@
 package io.radrower
 
 import android.os.SystemClock
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -65,11 +72,54 @@ class RowerScreenTest {
         compose.onNodeWithText("Session").assertIsDisplayed()
         compose.onNodeWithText("Pause").assertIsEnabled().performClick()
         compose.onNodeWithText("Stop").assertIsEnabled().performClick()
-        compose.onNodeWithText("300 W").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("dashboardGrid").performScrollToNode(hasText("300 W"))
+        compose.onNodeWithText("300 W").assertIsDisplayed()
         compose.runOnIdle {
             assertEquals(1, pauses)
             assertEquals(1, stops)
         }
+    }
+
+    @Test fun metricsGridAdaptsToAvailableWidth() {
+        var width by mutableStateOf(320.dp)
+        val now = SystemClock.elapsedRealtime()
+        compose.setContent {
+            Box(Modifier.requiredWidth(width)) {
+                RowerScreen(
+                    RowerUiState(
+                        ConnectionState.STREAMING,
+                        mapOf("sessionState" to Reading(2, now)),
+                    ),
+                    permissionGranted = true,
+                    bluetoothEnabled = true,
+                    bluetoothAvailable = true,
+                    onPermission = {},
+                    onEnableBluetooth = {},
+                    onRetry = {},
+                    onToggle = {},
+                    onStop = {},
+                )
+            }
+        }
+
+        fun bounds(label: String) = compose.onNodeWithText(label).fetchSemanticsNode().boundsInRoot
+
+        compose.onNodeWithTag("dashboardGrid").performScrollToNode(hasText("Pace"))
+        val power = bounds("Power")
+        val elapsed = bounds("Elapsed time")
+        val pace = bounds("Pace")
+        assertEquals(power.top, elapsed.top, 0.5f)
+        assertTrue(elapsed.left > power.left)
+        assertTrue(pace.top > power.top)
+
+        compose.runOnIdle { width = 700.dp }
+        compose.onNodeWithTag("dashboardGrid").performScrollToNode(hasText("Average pace"))
+        val widePower = bounds("Power")
+        val widePace = bounds("Pace")
+        val wideAveragePace = bounds("Average pace")
+        assertEquals(widePower.top, widePace.top, 0.5f)
+        assertTrue(widePace.left > widePower.left)
+        assertTrue(wideAveragePace.top > widePower.top)
     }
 
     @Test fun connectionCardTracksSessionAndConnectionState() {
