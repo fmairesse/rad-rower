@@ -47,8 +47,8 @@ internal data class RowerUiState(
     val message: String? = null,
     val controlling: Boolean = false,
 ) {
-    fun sessionState(now: Long): Int? =
-        readings["sessionState"]?.takeIf { now - it.receivedAt <= 5_000 }?.value as? Int
+    fun sessionState(now: Long): SessionState? =
+        SessionState.fromCode(readings["sessionState"]?.takeIf { now - it.receivedAt <= 5_000 }?.value as? Int)
 }
 
 internal fun bluetoothPermissions(): Array<String> =
@@ -373,12 +373,12 @@ internal class RowerConnection(
             }
         }
 
-        suspend fun command(messages: List<List<ByteArray>>, expected: Int, required: Boolean = true) {
+        suspend fun command(messages: List<List<ByteArray>>, expected: SessionState, required: Boolean = true) {
             val before = version
             send(messages.flatten())
             val confirmed = withTimeoutOrNull(5_000) {
                 sessionUpdates.first { update ->
-                    update > before && mutableState.value.readings["sessionState"]?.value == expected
+                    update > before && mutableState.value.readings["sessionState"]?.value == expected.code
                 }
             }
             if (confirmed == null && required) {

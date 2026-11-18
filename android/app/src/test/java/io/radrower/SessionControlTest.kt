@@ -7,37 +7,41 @@ import org.junit.Test
 class SessionControlTest {
     @Test fun stateMustBeRecentAndAvailable() {
         val state = RowerUiState(readings = mapOf("sessionState" to Reading(2, 1_000)))
-        assertEquals(2, state.sessionState(6_000))
+        assertEquals(SessionState.IN_PROGRESS, state.sessionState(6_000))
         assertNull(state.sessionState(6_001))
         assertNull(RowerUiState().sessionState(1_000))
         assertNull(RowerUiState(readings = mapOf("sessionState" to Reading(null, 1_000))).sessionState(1_000))
+        assertNull(RowerUiState(readings = mapOf("sessionState" to Reading(10, 1_000))).sessionState(1_000))
     }
 
     @Test fun commandsOnlyExistForValidStates() {
-        for (state in listOf(null, 0, 4, 10)) {
+        for (state in listOf(null, SessionState.FINISHED)) {
             assertNull(commandSteps(state, stop = false))
             assertNull(commandSteps(state, stop = true))
         }
-        assertNull(commandSteps(1, stop = true))
-        assertEquals(RowerProtocol.start, requireNotNull(commandSteps(1, false)).single().messages)
-        assertEquals(RowerProtocol.start, requireNotNull(commandSteps(3, false)).single().messages)
-        assertEquals(RowerProtocol.pause, requireNotNull(commandSteps(2, false)).single().messages)
+        assertNull(commandSteps(SessionState.IDLE, stop = true))
+        assertEquals(RowerProtocol.start, requireNotNull(commandSteps(SessionState.IDLE, false)).single().messages)
+        assertEquals(RowerProtocol.start, requireNotNull(commandSteps(SessionState.PAUSED, false)).single().messages)
+        assertEquals(RowerProtocol.pause, requireNotNull(commandSteps(SessionState.IN_PROGRESS, false)).single().messages)
     }
 
     @Test fun stopSequencesPauseEndAndIdle() = runBlocking {
-        for ((state, expected) in listOf(2 to listOf(3, 4, 1), 3 to listOf(4, 1))) {
+        for ((state, expected) in listOf(
+            SessionState.IN_PROGRESS to listOf(SessionState.PAUSED, SessionState.FINISHED, SessionState.IDLE),
+            SessionState.PAUSED to listOf(SessionState.FINISHED, SessionState.IDLE),
+        )) {
             val sent = mutableListOf<CommandStep>()
             runCommandSteps(requireNotNull(commandSteps(state, true))) { sent += it }
             assertEquals(expected, sent.map { it.expectedState })
-            assertEquals(false, sent.first { it.expectedState == 4 }.required)
+            assertEquals(false, sent.first { it.expectedState == SessionState.FINISHED }.required)
             assertEquals(RowerProtocol.idle, sent.last().messages)
         }
     }
 
     @Test fun failedPausePreventsEndAndIdle() = runBlocking {
-        val sent = mutableListOf<Int>()
+        val sent = mutableListOf<SessionState>()
         try {
-            runCommandSteps(requireNotNull(commandSteps(2, true))) {
+            runCommandSteps(requireNotNull(commandSteps(SessionState.IN_PROGRESS, true))) {
                 sent += it.expectedState
                 error("No confirmation")
             }
@@ -45,7 +49,7 @@ class SessionControlTest {
         } catch (error: IllegalStateException) {
             assertEquals("No confirmation", error.message)
         }
-        assertEquals(listOf(3), sent)
+        assertEquals(listOf(SessionState.PAUSED), sent)
     }
 
     @Test fun formatsTimeAndUnavailableValues() {

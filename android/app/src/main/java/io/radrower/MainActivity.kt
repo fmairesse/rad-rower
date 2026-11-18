@@ -321,24 +321,24 @@ internal fun RowerScreen(
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Session", style = MaterialTheme.typography.titleLarge)
                     Text(when (sessionState) {
-                        1 -> "Idle"
-                        2 -> "In progress"
-                        3 -> "Paused"
-                        4 -> "Finished"
-                        else -> "State unavailable"
+                        SessionState.IDLE -> "Idle"
+                        SessionState.IN_PROGRESS -> "In progress"
+                        SessionState.PAUSED -> "Paused"
+                        SessionState.FINISHED -> "Finished"
+                        null -> "State unavailable"
                     })
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = onToggle, enabled = ready && sessionState in listOf(1, 2, 3)) {
-                            Text(when (sessionState) { 2 -> "Pause"; 3 -> "Resume"; else -> "Start" })
+                        Button(onClick = onToggle, enabled = ready && sessionState in listOf(SessionState.IDLE, SessionState.IN_PROGRESS, SessionState.PAUSED)) {
+                            Text(when (sessionState) { SessionState.IN_PROGRESS -> "Pause"; SessionState.PAUSED -> "Resume"; else -> "Start" })
                         }
-                        OutlinedButton(onClick = onStop, enabled = ready && sessionState in listOf(2, 3)) {
+                        OutlinedButton(onClick = onStop, enabled = ready && sessionState in listOf(SessionState.IN_PROGRESS, SessionState.PAUSED)) {
                             Text("Stop")
                         }
                     }
                     if (state.controlling) Text("Waiting for the rower to confirm…")
                 }
             }
-            if (sessionState != 2) {
+            if (sessionState != SessionState.IN_PROGRESS) {
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text("Workouts", style = MaterialTheme.typography.titleLarge)
@@ -349,7 +349,7 @@ internal fun RowerScreen(
                     }
                 }
             }
-            if (sessionState == 2) {
+            if (sessionState == SessionState.IN_PROGRESS) {
                 Text("Live metrics", style = MaterialTheme.typography.titleLarge)
                 metrics.forEach { definition ->
                     val reading = state.readings[definition.key]
