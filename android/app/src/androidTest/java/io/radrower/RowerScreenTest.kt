@@ -4,7 +4,9 @@ import android.os.SystemClock
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -22,6 +24,7 @@ class RowerScreenTest {
                 { requests++ }, {}, {}, {}, {})
         }
         compose.onNodeWithText("Bluetooth permission is required.").assertIsDisplayed()
+        compose.onAllNodesWithText("Session").assertCountEquals(0)
         compose.onNodeWithText("Allow Bluetooth").performClick()
         compose.runOnIdle { assertEquals(1, requests) }
         compose.onNodeWithText("Start").assertIsNotEnabled()
@@ -40,6 +43,7 @@ class RowerScreenTest {
             )
         }
         compose.onNodeWithText("Connected to I_RW").assertIsDisplayed()
+        compose.onNodeWithText("Session").assertIsDisplayed()
         compose.onNodeWithText("Pause").assertIsEnabled().performClick()
         compose.onNodeWithText("Stop").assertIsEnabled().performClick()
         compose.onNodeWithText("300 W").performScrollTo().assertIsDisplayed()

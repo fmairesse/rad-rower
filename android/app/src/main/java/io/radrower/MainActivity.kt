@@ -317,25 +317,27 @@ internal fun RowerScreen(
                     state.message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }
             }
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Session", style = MaterialTheme.typography.titleLarge)
-                    Text(when (sessionState) {
-                        SessionState.IDLE -> "Idle"
-                        SessionState.IN_PROGRESS -> "In progress"
-                        SessionState.PAUSED -> "Paused"
-                        SessionState.FINISHED -> "Finished"
-                        null -> "State unavailable"
-                    })
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = onToggle, enabled = ready && sessionState in listOf(SessionState.IDLE, SessionState.IN_PROGRESS, SessionState.PAUSED)) {
-                            Text(when (sessionState) { SessionState.IN_PROGRESS -> "Pause"; SessionState.PAUSED -> "Resume"; else -> "Start" })
+            if (state.connection == ConnectionState.STREAMING) {
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Session", style = MaterialTheme.typography.titleLarge)
+                        Text(when (sessionState) {
+                            SessionState.IDLE -> "Idle"
+                            SessionState.IN_PROGRESS -> "In progress"
+                            SessionState.PAUSED -> "Paused"
+                            SessionState.FINISHED -> "Finished"
+                            null -> "State unavailable"
+                        })
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = onToggle, enabled = ready && sessionState in listOf(SessionState.IDLE, SessionState.IN_PROGRESS, SessionState.PAUSED)) {
+                                Text(when (sessionState) { SessionState.IN_PROGRESS -> "Pause"; SessionState.PAUSED -> "Resume"; else -> "Start" })
+                            }
+                            OutlinedButton(onClick = onStop, enabled = ready && sessionState in listOf(SessionState.IN_PROGRESS, SessionState.PAUSED)) {
+                                Text("Stop")
+                            }
                         }
-                        OutlinedButton(onClick = onStop, enabled = ready && sessionState in listOf(SessionState.IN_PROGRESS, SessionState.PAUSED)) {
-                            Text("Stop")
-                        }
+                        if (state.controlling) Text("Waiting for the rower to confirm…")
                     }
-                    if (state.controlling) Text("Waiting for the rower to confirm…")
                 }
             }
             if (sessionState != SessionState.IN_PROGRESS) {
