@@ -104,6 +104,9 @@ conversation. Si un choix change, indiquer quelle décision le remplace.
   active elapsed time and cumulative distance, not local wall-clock timing.
 - Limits: pending writes may be lost on abrupt termination; Android app backup
   settings apply. The app does not store Bluetooth device identifiers.
+- Schema history: Room exports each schema version as JSON to
+  `android/app/schemas/` (2026-11-18); commit the new file with every version
+  bump so migrations can be written and tested against it.
 - Tests: `android/app/src/androidTest/java/io/radrower/WorkoutPersistenceTest.kt`.
 
 ## D008 - Export completed Android workouts to Health Connect

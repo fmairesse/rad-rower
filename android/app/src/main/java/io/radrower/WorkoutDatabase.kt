@@ -91,7 +91,7 @@ internal abstract class WorkoutDao {
     abstract suspend fun recoverInterrupted()
 }
 
-@Database(entities = [Workout::class, WorkoutSample::class], version = 1, exportSchema = false)
+@Database(entities = [Workout::class, WorkoutSample::class], version = 1, exportSchema = true)
 internal abstract class WorkoutDatabase : RoomDatabase() {
     abstract fun workouts(): WorkoutDao
 
