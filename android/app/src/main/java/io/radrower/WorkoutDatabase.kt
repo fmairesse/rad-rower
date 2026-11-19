@@ -68,6 +68,25 @@ internal data class WorkoutSample(
     val unvalidatedMetricsJson: String? = null,
 )
 
+@Entity(
+    tableName = "segments",
+    primaryKeys = ["workoutId", "sequence"],
+    foreignKeys = [ForeignKey(
+        entity = Workout::class,
+        parentColumns = ["id"],
+        childColumns = ["workoutId"],
+        onDelete = ForeignKey.CASCADE,
+    )],
+    indices = [Index("workoutId")],
+)
+internal data class Segment(
+    val workoutId: String,
+    val sequence: Int,
+    val type: String,
+    val startedAtEpochMs: Long,
+    val endedAtEpochMs: Long? = null,
+)
+
 @Dao
 internal abstract class WorkoutDao {
     @Upsert
@@ -76,10 +95,14 @@ internal abstract class WorkoutDao {
     @Insert
     abstract suspend fun insertSample(sample: WorkoutSample)
 
+    @Upsert
+    abstract suspend fun upsertSegment(segment: Segment)
+
     @Transaction
-    open suspend fun save(workout: Workout, sample: WorkoutSample?) {
+    open suspend fun save(workout: Workout, sample: WorkoutSample?, segments: List<Segment> = emptyList()) {
         upsertWorkout(workout)
         if (sample != null) insertSample(sample)
+        segments.forEach { upsertSegment(it) }
     }
 
     @Query("SELECT * FROM workouts ORDER BY startedAtEpochMs DESC")
@@ -91,15 +114,32 @@ internal abstract class WorkoutDao {
     @Query("SELECT * FROM samples WHERE workoutId = :id ORDER BY sequence")
     abstract suspend fun samples(id: String): List<WorkoutSample>
 
+    @Query("SELECT * FROM segments WHERE workoutId = :id ORDER BY sequence")
+    abstract suspend fun segments(id: String): List<Segment>
+
+    @Query("""
+        UPDATE segments SET endedAtEpochMs = (
+            SELECT lastSampleAtEpochMs FROM workouts WHERE workouts.id = segments.workoutId
+        )
+        WHERE endedAtEpochMs IS NULL AND workoutId IN (SELECT id FROM workouts WHERE status = 'recording')
+    """)
+    abstract suspend fun closeRecoveredSegments()
+
     @Query("""
         UPDATE workouts SET status = 'interrupted', endedAtEpochMs = lastSampleAtEpochMs,
             endedOffsetS = lastSampleOffsetS
         WHERE status = 'recording'
     """)
-    abstract suspend fun recoverInterrupted()
+    abstract suspend fun markInterrupted()
+
+    @Transaction
+    open suspend fun recoverInterrupted() {
+        closeRecoveredSegments()
+        markInterrupted()
+    }
 }
 
-@Database(entities = [Workout::class, WorkoutSample::class], version = 1, exportSchema = true)
+@Database(entities = [Workout::class, WorkoutSample::class, Segment::class], version = 1, exportSchema = true)
 internal abstract class WorkoutDatabase : RoomDatabase() {
     abstract fun workouts(): WorkoutDao
 

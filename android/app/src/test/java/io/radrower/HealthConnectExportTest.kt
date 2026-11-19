@@ -3,6 +3,7 @@ package io.radrower
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
+import androidx.health.connect.client.records.ExerciseSegment
 import androidx.health.connect.client.records.PowerRecord
 import androidx.health.connect.client.records.SpeedRecord
 import org.junit.Assert.assertEquals
@@ -52,7 +53,12 @@ class HealthConnectExportTest {
             sample(4, 4_000, 2, 180.0, 25.2),
         )
 
-        val records = HealthConnectExport.records(workout, samples)
+        val segments = listOf(
+            Segment(workout.id, 0, "rowing", start, start + 2_000),
+            Segment(workout.id, 1, "pause", start + 2_000, start + 4_000),
+            Segment(workout.id, 2, "rowing", start + 4_000, end),
+        )
+        val records = HealthConnectExport.records(workout, samples, segments)
 
         assertEquals(5, records.size)
         val session = records.filterIsInstance<ExerciseSessionRecord>().single()
@@ -63,6 +69,17 @@ class HealthConnectExportTest {
         assertEquals(ZoneOffset.ofHours(1), session.startZoneOffset)
         assertEquals(ZoneOffset.ofHours(1), session.endZoneOffset)
         assertEquals("radrower:workout-1:exercise", session.metadata.clientRecordId)
+        assertEquals(2L, session.metadata.clientRecordVersion)
+        assertEquals(
+            listOf(
+                ExerciseSegment.EXERCISE_SEGMENT_TYPE_ROWING_MACHINE,
+                ExerciseSegment.EXERCISE_SEGMENT_TYPE_PAUSE,
+                ExerciseSegment.EXERCISE_SEGMENT_TYPE_ROWING_MACHINE,
+            ),
+            session.segments.map { it.segmentType },
+        )
+        assertEquals(segments.map { it.startedAtEpochMs }, session.segments.map { it.startTime.toEpochMilli() })
+        assertEquals(segments.map { it.endedAtEpochMs }, session.segments.map { it.endTime.toEpochMilli() })
 
         val distance = records.filterIsInstance<DistanceRecord>().single()
         assertEquals(123.0, distance.distance.inMeters, 0.0)
@@ -97,5 +114,37 @@ class HealthConnectExportTest {
             ),
             HealthConnectExport.permissionsFor(workout, samples),
         )
+    }
+
+    @Test
+    fun omitsZeroDurationSegmentsButRejectsInvalidSegments() {
+        val workout = Workout(
+            id = "test", startedAtEpochMs = 100, startedOffsetS = 0,
+            endedAtEpochMs = 300, lastSampleAtEpochMs = 300, lastSampleOffsetS = 0,
+            status = "completed", partial = false,
+        )
+        val session = HealthConnectExport.records(
+            workout,
+            segments = listOf(
+                Segment("test", 0, "rowing", 100, 200),
+                Segment("test", 1, "pause", 200, 200),
+                Segment("test", 2, "rowing", 200, 300),
+            ),
+        ).filterIsInstance<ExerciseSessionRecord>().single()
+        assertEquals(2, session.segments.size)
+        listOf(
+            Segment("other", 0, "rowing", 100, 200),
+            Segment("test", 0, "rowing", 100, null),
+            Segment("test", 0, "rowing", 99, 200),
+            Segment("test", 0, "rowing", 200, 301),
+            Segment("test", 0, "unknown", 100, 200),
+        ).forEach { segment ->
+            try {
+                HealthConnectExport.records(workout, segments = listOf(segment))
+                org.junit.Assert.fail("Expected invalid segment to be rejected: $segment")
+            } catch (_: IllegalArgumentException) {
+            } catch (_: IllegalStateException) {
+            }
+        }
     }
 }

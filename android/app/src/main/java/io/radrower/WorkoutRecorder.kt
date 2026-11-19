@@ -16,6 +16,8 @@ import kotlin.math.round
 internal class WorkoutRecorder(
     private val dao: WorkoutDao,
     scope: CoroutineScope,
+    private val clock: () -> Long = System::currentTimeMillis,
+    private val monotonicClock: () -> Long = SystemClock::elapsedRealtime,
 ) {
     private sealed interface Event {
         data class Metrics(
@@ -35,6 +37,7 @@ internal class WorkoutRecorder(
     private val mutableError = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = mutableError
     private var current: Workout? = null
+    private var currentSegment: Segment? = null
     private var rowerState: Int? = null
     private var lastMonotonicMs: Long? = null
 
@@ -59,6 +62,7 @@ internal class WorkoutRecorder(
                     mutableError.value = "Workout storage failed; some data may be missing: ${error.message ?: "database error"}"
                     if (event is Event.Disconnect) {
                         current = null
+                        currentSegment = null
                         rowerState = null
                         lastMonotonicMs = null
                     }
@@ -68,12 +72,12 @@ internal class WorkoutRecorder(
     }
 
     fun record(values: Map<String, Any?>) {
-        val now = System.currentTimeMillis()
-        events.trySend(Event.Metrics(values.toMap(), now, SystemClock.elapsedRealtime(), offsetAt(now)))
+        val now = clock()
+        events.trySend(Event.Metrics(values.toMap(), now, monotonicClock(), offsetAt(now)))
     }
 
     fun disconnect() {
-        val now = System.currentTimeMillis()
+        val now = clock()
         events.trySend(Event.Disconnect(now, offsetAt(now)))
     }
 
@@ -100,6 +104,9 @@ internal class WorkoutRecorder(
                 return
             }
         val sampleState = requireNotNull(state ?: rowerState)
+        require(previous == null || event.timestampEpochMs >= previous.lastSampleAtEpochMs) {
+            "Workout time moved backwards."
+        }
         val activeMs =
             workout.activeMs +
                 if (previous != null && rowerState == 2 && lastMonotonicMs != null) {
@@ -183,14 +190,39 @@ internal class WorkoutRecorder(
             speedKmh = metric("speedKmh"),
             unvalidatedMetricsJson = unvalidatedMetrics.takeIf { it.length() > 0 }?.toString(),
         )
-        dao.save(next, sample)
+        val segmentType = when (sampleState) {
+            SessionState.IN_PROGRESS.code -> "rowing"
+            SessionState.PAUSED.code -> "pause"
+            else -> currentSegment?.type
+        }
+        val oldSegment = currentSegment
+        val segmentChanges = mutableListOf<Segment>()
+        var nextSegment = oldSegment
+        if (oldSegment != null && (finished || segmentType != oldSegment.type)) {
+            require(event.timestampEpochMs >= oldSegment.startedAtEpochMs) { "Workout segment time moved backwards." }
+            segmentChanges += oldSegment.copy(endedAtEpochMs = event.timestampEpochMs)
+            nextSegment = null
+        }
+        if (!finished && nextSegment == null && segmentType != null) {
+            nextSegment = Segment(
+                workoutId = workout.id,
+                sequence = (oldSegment?.sequence ?: -1) + 1,
+                type = segmentType,
+                startedAtEpochMs = event.timestampEpochMs,
+            )
+            segmentChanges += nextSegment
+        }
+        dao.save(next, sample, segmentChanges)
         current = if (finished) null else next
+        currentSegment = nextSegment
         rowerState = if (finished) null else state ?: rowerState
         lastMonotonicMs = if (finished) null else event.monotonicMs
     }
 
     private suspend fun interrupt(event: Event.Disconnect) {
         val workout = current ?: return
+        val segment = requireNotNull(currentSegment)
+        require(event.timestampEpochMs >= workout.lastSampleAtEpochMs) { "Workout time moved backwards." }
         dao.save(
             workout.copy(
                 status = "interrupted",
@@ -198,8 +230,10 @@ internal class WorkoutRecorder(
                 endedOffsetS = event.offsetS,
             ),
             null,
+            listOf(segment.copy(endedAtEpochMs = event.timestampEpochMs)),
         )
         current = null
+        currentSegment = null
         rowerState = null
         lastMonotonicMs = null
     }

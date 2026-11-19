@@ -5,6 +5,7 @@ import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
+import androidx.health.connect.client.records.ExerciseSegment
 import androidx.health.connect.client.records.PowerRecord
 import androidx.health.connect.client.records.Record
 import androidx.health.connect.client.records.SpeedRecord
@@ -46,7 +47,11 @@ internal object HealthConnectExport {
         }
     }
 
-    fun records(workout: Workout, samples: List<WorkoutSample> = emptyList()): List<Record> {
+    fun records(
+        workout: Workout,
+        samples: List<WorkoutSample> = emptyList(),
+        segments: List<Segment> = emptyList(),
+    ): List<Record> {
         require(isEligible(workout)) {
             "Only completed, non-partial workouts with a valid time range can be exported."
         }
@@ -65,7 +70,24 @@ internal object HealthConnectExport {
                 endZoneOffset = endOffset,
                 exerciseType = ExerciseSessionRecord.EXERCISE_TYPE_ROWING_MACHINE,
                 title = "Indoor rowing",
-                metadata = metadata(sessionId),
+                segments = segments.mapNotNull { segment ->
+                    require(segment.workoutId == workout.id) { "Segment belongs to another workout." }
+                    val segmentEnd = requireNotNull(segment.endedAtEpochMs) { "Workout segment is not closed." }
+                    require(segment.startedAtEpochMs in workout.startedAtEpochMs..segmentEnd && segmentEnd <= workout.endedAtEpochMs) {
+                        "Workout segment has an invalid time range."
+                    }
+                    val type = when (segment.type) {
+                        "rowing" -> ExerciseSegment.EXERCISE_SEGMENT_TYPE_ROWING_MACHINE
+                        "pause" -> ExerciseSegment.EXERCISE_SEGMENT_TYPE_PAUSE
+                        else -> error("Unsupported workout segment type: ${segment.type}")
+                    }
+                    if (segment.startedAtEpochMs == segmentEnd) null else ExerciseSegment(
+                        startTime = Instant.ofEpochMilli(segment.startedAtEpochMs),
+                        endTime = Instant.ofEpochMilli(segmentEnd),
+                        segmentType = type,
+                    )
+                },
+                metadata = metadata(sessionId, clientRecordVersion = 2),
             ),
         )
         workout.distanceM.takeIf { it.isPositiveFinite() }?.let { distanceM ->
@@ -121,6 +143,7 @@ internal object HealthConnectExport {
         client: HealthConnectClient,
         workout: Workout,
         samples: List<WorkoutSample> = emptyList(),
+        segments: List<Segment> = emptyList(),
     ) {
         val requiredPermissions = permissionsFor(workout, samples)
         val grantedPermissions = client.permissionController.getGrantedPermissions()
@@ -128,7 +151,7 @@ internal object HealthConnectExport {
             "Health Connect permissions are missing. Grant access and try again."
         }
         // Retries are idempotent thanks to stable client record IDs, so chunking is safe.
-        records(workout, samples).chunked(MAX_RECORDS_PER_INSERT).forEach { client.insertRecords(it) }
+        records(workout, samples, segments).chunked(MAX_RECORDS_PER_INSERT).forEach { client.insertRecords(it) }
     }
 
     private fun activeMetricSamples(

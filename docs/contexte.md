@@ -51,6 +51,16 @@ independent. A synthetic production export was inserted and removed on an
 emulator with Health Connect; real-workout and permission UX validation are
 still needed. See `android/README.md` for operation and limitations.
 
+Android workouts now persist rowing and pause segments at observed session-state
+transitions, closing them on completion, disconnection or recovery. Completed
+workouts export these as Health Connect exercise segments; zero-duration
+segments are omitted. The pre-release Room schema version 1 was reset again
+without migration, so existing app databases must be cleared or reinstalled.
+Real-rower timing and downstream handling of pause segments remain unverified;
+the persistence and export tests pass with simulated data on an Android 16
+emulator, and the local export conversion tests pass. See
+`WorkoutPersistenceTest.kt` and `HealthConnectExportTest.kt`.
+
 The user no longer wants to tailor Health Connect exports to Strava and reports
 that the earlier D2 speed-series experiment worked with Intervals.icu. On
 2026-11-19, synthetic I1 was inserted on the connected phone: a 10-minute

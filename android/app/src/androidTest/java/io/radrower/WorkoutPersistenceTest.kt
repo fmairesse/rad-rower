@@ -85,11 +85,19 @@ class WorkoutPersistenceTest {
         assertEquals(145, unvalidated.getInt("averagePace"))
         assertTrue(samples.all { it.resistanceLevel == 1 })
         assertNull(samples[3].powerW)
+        val segments = dao.segments(workout.id)
+        assertEquals(listOf("rowing", "pause", "rowing"), segments.map { it.type })
+        assertEquals(listOf(0, 1, 2), segments.map { it.sequence })
+        assertEquals(workout.startedAtEpochMs, segments.first().startedAtEpochMs)
+        assertEquals(workout.endedAtEpochMs, segments.last().endedAtEpochMs)
+        assertEquals(segments[0].endedAtEpochMs, segments[1].startedAtEpochMs)
+        assertEquals(segments[1].endedAtEpochMs, segments[2].startedAtEpochMs)
         scope.cancel()
         database.close()
         database = Room.databaseBuilder(context, WorkoutDatabase::class.java, name).build()
         assertEquals(workout, database.workouts().workouts().single())
         assertEquals(samples, database.workouts().samples(workout.id))
+        assertEquals(segments, database.workouts().segments(workout.id))
     }
 
     @Test fun calculatesAverageSpeedAndPaceFromRowerElapsedTime() = runBlocking {
@@ -139,6 +147,8 @@ class WorkoutPersistenceTest {
         val first = dao.workouts().single()
         assertTrue(first.partial)
         assertNotNull(first.endedAtEpochMs)
+        assertEquals("pause", dao.segments(first.id).single().type)
+        assertEquals(first.endedAtEpochMs, dao.segments(first.id).single().endedAtEpochMs)
         recorder.recordMetrics("sessionState" to 2, "elapsedS" to 0)
         waitUntil { dao.workouts().size == 2 }
         scope.cancel()
@@ -147,6 +157,67 @@ class WorkoutPersistenceTest {
         assertEquals("interrupted", recovered.status)
         assertEquals(recovered.lastSampleAtEpochMs, recovered.endedAtEpochMs)
         assertEquals(1, dao.samples(recovered.id).size)
+        assertEquals(recovered.endedAtEpochMs, dao.segments(recovered.id).single().endedAtEpochMs)
+    }
+
+    @Test fun recordsRepeatedTransitionsAndFinishesWhilePaused() = runBlocking {
+        val dao = database.workouts()
+        var now = 1_700_000_000_000L
+        val recorder = WorkoutRecorder(dao, scope, clock = { now }, monotonicClock = { now })
+        fun send(state: Int?) {
+            recorder.recordMetrics("sessionState" to state)
+            now += 1_000
+        }
+        send(1)
+        send(2)
+        send(2)
+        send(3)
+        send(3)
+        send(2)
+        send(3)
+        send(4)
+        waitUntil { dao.workouts().singleOrNull()?.status == "completed" }
+        val workout = dao.workouts().single()
+        val segments = dao.segments(workout.id)
+        assertEquals(listOf("rowing", "pause", "rowing", "pause"), segments.map { it.type })
+        assertEquals(listOf(2_000L, 2_000L, 1_000L, 1_000L), segments.map { it.endedAtEpochMs!! - it.startedAtEpochMs })
+        assertEquals(listOf(1_000L, 3_000L, 5_000L, 6_000L), segments.map { it.startedAtEpochMs - 1_700_000_000_000L })
+        assertEquals(workout.endedAtEpochMs, segments.last().endedAtEpochMs)
+    }
+
+    @Test fun unknownStateDoesNotSplitTheCurrentSegment() = runBlocking {
+        val dao = database.workouts()
+        var now = 1_700_000_000_000L
+        val recorder = WorkoutRecorder(dao, scope, clock = { now }, monotonicClock = { now })
+        recorder.recordMetrics("sessionState" to 1)
+        recorder.recordMetrics("sessionState" to 2)
+        now += 1_000
+        recorder.recordMetrics("sessionState" to 99)
+        now += 1_000
+        recorder.recordMetrics("sessionState" to 2)
+        now += 1_000
+        recorder.recordMetrics("sessionState" to 4)
+        waitUntil { dao.workouts().singleOrNull()?.status == "completed" }
+        val workout = dao.workouts().single()
+        assertEquals(listOf(Segment(workout.id, 0, "rowing", workout.startedAtEpochMs, workout.endedAtEpochMs)), dao.segments(workout.id))
+    }
+
+    @Test fun invalidSegmentRollsBackWorkoutAndSample() = runBlocking {
+        val dao = database.workouts()
+        val workout = Workout("test", 100, 0, lastSampleAtEpochMs = 100, lastSampleOffsetS = 0, partial = false)
+        dao.save(workout, null)
+        val sample = WorkoutSample(
+            workoutId = workout.id, sequence = 0, timestampEpochMs = 101,
+            offsetS = 0, sessionState = 2, resistanceLevel = 1,
+        )
+        try {
+            dao.save(workout.copy(sampleCount = 1), sample, listOf(Segment("missing", 0, "rowing", 100)))
+            fail("Expected a foreign-key failure")
+        } catch (_: android.database.sqlite.SQLiteConstraintException) {
+            assertEquals(0, dao.workouts().single().sampleCount)
+            assertTrue(dao.samples(workout.id).isEmpty())
+            assertTrue(dao.segments(workout.id).isEmpty())
+        }
     }
 
     @Test fun invalidSampleRollsBackWorkoutUpdate() = runBlocking {
@@ -177,13 +248,17 @@ class WorkoutPersistenceTest {
             @Volatile var failWrites = false
             override suspend fun upsertWorkout(workout: Workout) = dao.upsertWorkout(workout)
             override suspend fun insertSample(sample: WorkoutSample) = dao.insertSample(sample)
+            override suspend fun upsertSegment(segment: Segment) = dao.upsertSegment(segment)
             override fun observeWorkouts() = dao.observeWorkouts()
             override suspend fun workouts() = dao.workouts()
             override suspend fun samples(id: String) = dao.samples(id)
+            override suspend fun segments(id: String) = dao.segments(id)
+            override suspend fun closeRecoveredSegments() = dao.closeRecoveredSegments()
+            override suspend fun markInterrupted() = dao.markInterrupted()
             override suspend fun recoverInterrupted() = dao.recoverInterrupted()
-            override suspend fun save(workout: Workout, sample: WorkoutSample?) {
+            override suspend fun save(workout: Workout, sample: WorkoutSample?, segments: List<Segment>) {
                 if (failWrites) error("Storage unavailable")
-                dao.save(workout, sample)
+                dao.save(workout, sample, segments)
             }
         }
         val recorder = WorkoutRecorder(failingDao, scope)

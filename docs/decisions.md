@@ -117,6 +117,7 @@ conversation. Si un choix change, indiquer quelle décision le remplace.
 - Schema reset: before release, schema version 1 was replaced on 2026-11-19
   with no data migration; existing debug databases must be cleared or the app
   reinstalled. Room exports the replacement schema to `android/app/schemas/`.
+  It was reset again on 2026-11-19 to add workout segments.
 - Tests: `android/app/src/androidTest/java/io/radrower/WorkoutPersistenceTest.kt`.
 
 ## D008 - Export completed Android workouts to Health Connect
@@ -157,6 +158,12 @@ conversation. Si un choix change, indiquer quelle décision le remplace.
   0-100000 W but sets no limit on samples per `PowerRecord`; whether the
   Health Connect service enforces a series sample limit is unverified, so
   power and speed series are exported without downsampling until tested.
+- Segments (2026-11-19): persist rowing and pause intervals at observed state
+  transitions and export them as exercise segments. Close interrupted intervals
+  at disconnect or the last saved sample on recovery. Omit zero-duration
+  intervals because Health Connect requires positive duration; increment the
+  exercise record version so re-export updates it. Exact transition timing and
+  downstream pause handling remain unverified on a real workout.
 - Limits: availability, consent UI, permissions and remote write behavior
   require a real-workout test. Partial and interrupted workouts are not
   exported; zero or unavailable metric totals are omitted. Production export

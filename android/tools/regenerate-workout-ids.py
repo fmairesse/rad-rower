@@ -59,6 +59,7 @@ def regenerate_ids(db_path):
             new = str(uuid.uuid4())
             conn.execute("UPDATE workouts SET id = ? WHERE id = ?", (new, old))
             conn.execute("UPDATE samples SET workoutId = ? WHERE workoutId = ?", (new, old))
+            conn.execute("UPDATE segments SET workoutId = ? WHERE workoutId = ?", (new, old))
             changes.append((old, new))
         conn.commit()
         # Fold the WAL into the main file so a single file can be pushed back.

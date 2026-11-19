@@ -64,6 +64,7 @@ class MainActivity : ComponentActivity() {
     private data class PendingHealthExport(
         val workout: Workout,
         val samples: List<WorkoutSample>,
+        val segments: List<Segment>,
     )
 
     private var pendingHealthExport: PendingHealthExport? = null
@@ -84,7 +85,7 @@ class MainActivity : ComponentActivity() {
             pendingHealthExport = null
             if (export != null) {
                 if (grantedPermissions.containsAll(HealthConnectExport.permissionsFor(export.workout, export.samples))) {
-                    writeWorkoutToHealthConnect(export.workout, export.samples)
+                    writeWorkoutToHealthConnect(export.workout, export.samples, export.segments)
                 } else {
                     exportingWorkoutId = null
                     healthExportMessage = "Health Connect permission was not granted."
@@ -216,11 +217,13 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             try {
                 val client = HealthConnectClient.getOrCreate(applicationContext)
-                val samples = (application as RadrowerApplication).database.workouts().samples(workout.id)
-                val export = PendingHealthExport(workout, samples)
+                val dao = (application as RadrowerApplication).database.workouts()
+                val samples = dao.samples(workout.id)
+                val segments = dao.segments(workout.id)
+                val export = PendingHealthExport(workout, samples, segments)
                 val neededPermissions = HealthConnectExport.permissionsFor(workout, samples)
                 if (client.permissionController.getGrantedPermissions().containsAll(neededPermissions)) {
-                    writeWorkoutToHealthConnect(workout, samples, client)
+                    writeWorkoutToHealthConnect(workout, samples, segments, client)
                 } else {
                     pendingHealthExport = export
                     healthConnectPermissions.launch(neededPermissions)
@@ -235,12 +238,13 @@ class MainActivity : ComponentActivity() {
     private fun writeWorkoutToHealthConnect(
         workout: Workout,
         samples: List<WorkoutSample>,
+        segments: List<Segment>,
         client: HealthConnectClient? = null,
     ) {
         lifecycleScope.launch {
             try {
                 val healthConnectClient = client ?: HealthConnectClient.getOrCreate(applicationContext)
-                HealthConnectExport.export(healthConnectClient, workout, samples)
+                HealthConnectExport.export(healthConnectClient, workout, samples, segments)
                 finishHealthConnectExport("Workout exported to Health Connect.", false)
             } catch (error: Exception) {
                 if (error is CancellationException) throw error

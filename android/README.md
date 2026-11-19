@@ -43,6 +43,16 @@ reported by the rower; unavailable values are shown as a dash. Recording,
 interrupted and partial workouts remain visible with their status.
 Average speed and pace are calculated from the rower's cumulative distance and
 active elapsed time for complete workouts when both measurements are available.
+Each workout also stores contiguous rowing and pause segments based on the
+observed session-state transitions. A stop from active state first requests a
+pause, so a short final pause may be recorded. An interrupted segment ends at
+disconnection, or at the last saved sample after an unexpected shutdown.
+Transition timestamps reflect when the app received the state, not the exact
+instant the rower changed state.
+
+The pre-release database schema was reset without migration when segments were
+added. Existing app databases must be cleared or the app reinstalled; this
+deletes locally saved workouts.
 
 An active workout is marked **interrupted** when the connection is lost or the
 app leaves the foreground. After an unexpected process termination, unfinished
@@ -58,6 +68,8 @@ Completed, non-partial workouts can be exported from **Workout history** to
 Health Connect. Export is always initiated by the user. Radrower writes an
 indoor rowing exercise session, one distance record using the stored cumulative
 distance, active calories, and separate timestamped power and speed records.
+The session includes the stored rowing and pause segments; zero-duration
+segments are omitted because Health Connect requires a positive duration.
 The stored distance is the highest valid rower counter value, and may differ
 from the integral of the speed series.
 Speed is derived from the rower's reported pace and converted from km/h to m/s;
