@@ -56,7 +56,7 @@ class RowerScreenTest {
             RowerScreen(
                 RowerUiState(
                     ConnectionState.STREAMING,
-                    mapOf("sessionState" to Reading(2, now), "watts" to Reading(300, now)),
+                    mapOf("sessionState" to Reading(2, now), "powerW" to Reading(300, now)),
                 ),
                 permissionGranted = true,
                 bluetoothEnabled = true,
@@ -106,20 +106,20 @@ class RowerScreenTest {
 
         compose.onNodeWithTag("dashboardGrid").performScrollToNode(hasText("Pace"))
         val power = bounds("Power")
-        val elapsed = bounds("Elapsed time")
+        val elapsedS = bounds("Elapsed time")
         val pace = bounds("Pace")
-        assertEquals(power.top, elapsed.top, 0.5f)
-        assertTrue(elapsed.left > power.left)
+        assertEquals(power.top, elapsedS.top, 0.5f)
+        assertTrue(elapsedS.left > power.left)
         assertTrue(pace.top > power.top)
 
         compose.runOnIdle { width = 700.dp }
-        compose.onNodeWithTag("dashboardGrid").performScrollToNode(hasText("Average pace"))
+        compose.onNodeWithTag("dashboardGrid").performScrollToNode(hasText("Cadence"))
         val widePower = bounds("Power")
         val widePace = bounds("Pace")
-        val wideAveragePace = bounds("Average pace")
+        val wideCadence = bounds("Cadence")
         assertEquals(widePower.top, widePace.top, 0.5f)
         assertTrue(widePace.left > widePower.left)
-        assertTrue(wideAveragePace.top > widePower.top)
+        assertTrue(wideCadence.top > widePower.top)
     }
 
     @Test fun connectionCardTracksSessionAndConnectionState() {

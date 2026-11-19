@@ -17,30 +17,39 @@ class HealthConnectExportTest {
         val end = start + 10_000
         val workout = Workout(
             id = "workout-1",
-            startedAt = start,
-            startedOffsetSeconds = 3_600,
-            endedAt = end,
-            endedOffsetSeconds = 3_600,
-            lastSampleAt = end,
-            lastSampleOffsetSeconds = 3_600,
+            startedAtEpochMs = start,
+            startedOffsetS = 3_600,
+            endedAtEpochMs = end,
+            endedOffsetS = 3_600,
+            lastSampleAtEpochMs = end,
+            lastSampleOffsetS = 3_600,
             status = "completed",
             partial = false,
-            distance = 123.0,
-            calories = 12.5,
+            distanceM = 123.0,
+            caloriesKcal = 12.5,
         )
-        fun sample(sequence: Int, elapsedMillis: Long, json: String) = WorkoutSample(
+        fun sample(
+            sequence: Int,
+            elapsedMs: Long,
+            sessionState: Int,
+            powerW: Double,
+            speedKmh: Double,
+        ) = WorkoutSample(
             workoutId = workout.id,
             sequence = sequence,
-            timestamp = start + elapsedMillis,
-            offsetSeconds = 3_600,
-            metricsJson = json,
+            timestampEpochMs = start + elapsedMs,
+            offsetS = 3_600,
+            sessionState = sessionState,
+            powerW = powerW,
+            resistanceLevel = 1,
+            speedKmh = speedKmh,
         )
         val samples = listOf(
-            sample(0, 0, """{"sessionState":2,"watts":100,"speed":18}"""),
-            sample(1, 1_000, """{"watts":150,"speed":21.6}"""),
-            sample(2, 2_000, """{"sessionState":3,"watts":0,"speed":0}"""),
-            sample(3, 3_000, """{"watts":200,"speed":36}"""),
-            sample(4, 4_000, """{"sessionState":2,"watts":180,"speed":25.2}"""),
+            sample(0, 0, 2, 100.0, 18.0),
+            sample(1, 1_000, 2, 150.0, 21.6),
+            sample(2, 2_000, 3, 0.0, 0.0),
+            sample(3, 3_000, 3, 200.0, 36.0),
+            sample(4, 4_000, 2, 180.0, 25.2),
         )
 
         val records = HealthConnectExport.records(workout, samples)

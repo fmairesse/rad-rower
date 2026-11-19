@@ -44,32 +44,47 @@ class WorkoutPersistenceTest {
         }
     }
 
+    private fun WorkoutRecorder.recordMetrics(vararg values: Pair<String, Any?>) {
+        record(mapOf(*values, "resistanceLevel" to 1))
+    }
+
     @Test fun savesWorkoutSamplesAndRecoversAfterReopening() = runBlocking {
         val dao = database.workouts()
         val recorder = WorkoutRecorder(dao, scope)
-        recorder.record(mapOf("sessionState" to 1, "distance" to 999))
-        recorder.record(mapOf("sessionState" to 2, "elapsed" to 0, "distance" to 0))
-        recorder.record(mapOf("watts" to 120, "cadence" to 24, "averagePace" to 123, "caloriesPerHour" to 800))
-        recorder.record(mapOf("sessionState" to 3, "distance" to 100, "calories" to 10))
-        recorder.record(mapOf("watts" to null))
-        recorder.record(mapOf("sessionState" to 2, "elapsed" to 20))
-        recorder.record(mapOf("sessionState" to 4, "distance" to 0, "calories" to 0))
-        recorder.record(mapOf("sessionState" to 1))
+        recorder.recordMetrics("sessionState" to 1, "distanceM" to 999)
+        recorder.recordMetrics("sessionState" to 2, "elapsedS" to 0, "distanceM" to 0)
+        recorder.recordMetrics(
+            "powerW" to 120,
+            "cadenceSpm" to 24,
+            "averageWatts" to 110,
+            "paused" to 5,
+            "caloriesPerHour" to 800,
+            "averagePace" to 145,
+        )
+        recorder.recordMetrics("sessionState" to 3, "distanceM" to 100, "caloriesKcal" to 10)
+        recorder.recordMetrics("powerW" to null)
+        recorder.recordMetrics("sessionState" to 2, "elapsedS" to 20)
+        recorder.recordMetrics("sessionState" to 4, "distanceM" to 0, "caloriesKcal" to 0)
+        recorder.recordMetrics("sessionState" to 1)
         waitUntil { dao.workouts().singleOrNull()?.status == "completed" }
         val workout = dao.workouts().single()
         assertFalse(workout.partial)
-        assertEquals(100.0, workout.distance!!, 0.0)
-        assertEquals(10.0, workout.calories!!, 0.0)
-        assertEquals(24.0, workout.averageCadence!!, 0.0)
+        assertEquals(100.0, workout.distanceM!!, 0.0)
+        assertEquals(10.0, workout.caloriesKcal!!, 0.0)
+        assertEquals(24.0, workout.averageCadenceSpm!!, 0.0)
         val samples = dao.samples(workout.id)
         assertEquals(6, samples.size)
         assertEquals(samples.size, workout.sampleCount)
         assertEquals((0..5).toList(), samples.map { it.sequence })
-        val motion = JSONObject(samples[1].metricsJson)
-        assertEquals(120, motion.getInt("watts"))
-        assertFalse(motion.has("averagePace"))
-        assertFalse(motion.has("caloriesPerHour"))
-        assertTrue(JSONObject(samples[3].metricsJson).isNull("watts"))
+        assertEquals(120.0, samples[1].powerW!!, 0.0)
+        assertEquals(24.0, samples[1].cadenceSpm!!, 0.0)
+        val unvalidated = JSONObject(requireNotNull(samples[1].unvalidatedMetricsJson))
+        assertEquals(110, unvalidated.getInt("averageWatts"))
+        assertEquals(5, unvalidated.getInt("paused"))
+        assertEquals(800, unvalidated.getInt("caloriesPerHour"))
+        assertEquals(145, unvalidated.getInt("averagePace"))
+        assertTrue(samples.all { it.resistanceLevel == 1 })
+        assertNull(samples[3].powerW)
         scope.cancel()
         database.close()
         database = Room.databaseBuilder(context, WorkoutDatabase::class.java, name).build()
@@ -80,67 +95,76 @@ class WorkoutPersistenceTest {
     @Test fun calculatesAverageSpeedAndPaceFromRowerElapsedTime() = runBlocking {
         val dao = database.workouts()
         val recorder = WorkoutRecorder(dao, scope)
-        recorder.record(mapOf("sessionState" to 1))
-        recorder.record(mapOf("sessionState" to 2, "elapsed" to 100, "distance" to 0))
-        recorder.record(mapOf("sessionState" to 3, "elapsed" to 110, "distance" to 300))
-        recorder.record(mapOf("elapsed" to 110, "distance" to 0))
-        recorder.record(mapOf("sessionState" to 2, "elapsed" to 110, "distance" to 300))
-        recorder.record(mapOf("elapsed" to 120, "distance" to 500))
-        recorder.record(mapOf("sessionState" to 4, "elapsed" to 120, "distance" to 0))
-        recorder.record(mapOf("sessionState" to 1))
+        recorder.recordMetrics("sessionState" to 1)
+        recorder.recordMetrics("sessionState" to 2, "elapsedS" to 100, "distanceM" to 0)
+        recorder.recordMetrics("sessionState" to 3, "elapsedS" to 110, "distanceM" to 300)
+        recorder.recordMetrics("elapsedS" to 110, "distanceM" to 0)
+        recorder.recordMetrics("sessionState" to 2, "elapsedS" to 110, "distanceM" to 300)
+        recorder.recordMetrics("elapsedS" to 120, "distanceM" to 500)
+        recorder.recordMetrics("sessionState" to 4, "elapsedS" to 120, "distanceM" to 0)
+        recorder.recordMetrics("sessionState" to 1)
 
         waitUntil { dao.workouts().singleOrNull()?.status == "completed" }
         val workout = dao.workouts().single()
 
         assertFalse(workout.partial)
-        assertEquals(120.0, workout.elapsed!!, 0.0)
-        assertEquals(500.0, workout.distance!!, 0.0)
-        assertEquals(15.0, workout.averageSpeed!!, 0.0)
-        assertEquals(120.0, workout.averagePace!!, 0.0)
+        assertEquals(120.0, workout.elapsedS!!, 0.0)
+        assertEquals(500.0, workout.distanceM!!, 0.0)
+        assertEquals(15.0, workout.averageSpeedKmh!!, 0.0)
+        assertEquals(120.0, workout.averagePaceSPer500M!!, 0.0)
     }
 
     @Test fun omitsAveragesWhenRecordingStartsMidWorkout() = runBlocking {
         val dao = database.workouts()
         val recorder = WorkoutRecorder(dao, scope)
-        recorder.record(mapOf("sessionState" to 2, "elapsed" to 100, "distance" to 300))
-        recorder.record(mapOf("sessionState" to 2, "elapsed" to 120, "distance" to 500))
-        recorder.record(mapOf("sessionState" to 4, "elapsed" to 120, "distance" to 500))
-        recorder.record(mapOf("sessionState" to 1))
+        recorder.recordMetrics("sessionState" to 2, "elapsedS" to 100, "distanceM" to 300)
+        recorder.recordMetrics("sessionState" to 2, "elapsedS" to 120, "distanceM" to 500)
+        recorder.recordMetrics("sessionState" to 4, "elapsedS" to 120, "distanceM" to 500)
+        recorder.recordMetrics("sessionState" to 1)
 
         waitUntil { dao.workouts().singleOrNull()?.status == "completed" }
         val workout = dao.workouts().single()
 
         assertTrue(workout.partial)
-        assertNull(workout.averageSpeed)
-        assertNull(workout.averagePace)
+        assertNull(workout.averageSpeedKmh)
+        assertNull(workout.averagePaceSPer500M)
     }
 
     @Test fun disconnectAndRecoveryPreserveInterruptedWorkouts() = runBlocking {
         val dao = database.workouts()
         val recorder = WorkoutRecorder(dao, scope)
-        recorder.record(mapOf("sessionState" to 3, "elapsed" to 50))
+        recorder.recordMetrics("sessionState" to 3, "elapsedS" to 50)
         recorder.disconnect()
         waitUntil { dao.workouts().singleOrNull()?.status == "interrupted" }
         val first = dao.workouts().single()
         assertTrue(first.partial)
-        assertNotNull(first.endedAt)
-        recorder.record(mapOf("sessionState" to 2, "elapsed" to 0))
+        assertNotNull(first.endedAtEpochMs)
+        recorder.recordMetrics("sessionState" to 2, "elapsedS" to 0)
         waitUntil { dao.workouts().size == 2 }
         scope.cancel()
         dao.recoverInterrupted()
         val recovered = dao.workouts().single { it.id != first.id }
         assertEquals("interrupted", recovered.status)
-        assertEquals(recovered.lastSampleAt, recovered.endedAt)
+        assertEquals(recovered.lastSampleAtEpochMs, recovered.endedAtEpochMs)
         assertEquals(1, dao.samples(recovered.id).size)
     }
 
     @Test fun invalidSampleRollsBackWorkoutUpdate() = runBlocking {
         val dao = database.workouts()
-        val original = Workout("test", 100, 0, lastSampleAt = 100, lastSampleOffsetSeconds = 0, partial = false)
+        val original = Workout("test", 100, 0, lastSampleAtEpochMs = 100, lastSampleOffsetS = 0, partial = false)
         dao.save(original, null)
         try {
-            dao.save(original.copy(status = "completed"),
-                WorkoutSample("missing", 0, 100, 0, "{}"))
+            dao.save(
+                original.copy(status = "completed"),
+                WorkoutSample(
+                    workoutId = "missing",
+                    sequence = 0,
+                    timestampEpochMs = 100,
+                    offsetS = 0,
+                    sessionState = SessionState.IDLE.code,
+                    resistanceLevel = 1,
+                ),
+            )
             fail("Expected a foreign-key failure")
         } catch (_: android.database.sqlite.SQLiteConstraintException) {
             assertEquals("recording", dao.workouts().single().status)
@@ -163,10 +187,10 @@ class WorkoutPersistenceTest {
             }
         }
         val recorder = WorkoutRecorder(failingDao, scope)
-        recorder.record(mapOf("sessionState" to 2, "elapsed" to 0))
+        recorder.recordMetrics("sessionState" to 2, "elapsedS" to 0)
         waitUntil { dao.workouts().isNotEmpty() }
         failingDao.failWrites = true
-        recorder.record(mapOf("watts" to 120))
+        recorder.recordMetrics("powerW" to 120)
         val message = withTimeout(10_000.milliseconds) { recorder.error.first { it != null } }
         assertTrue(requireNotNull(message).contains("Workout storage failed"))
     }

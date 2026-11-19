@@ -114,7 +114,7 @@ private fun WorkoutHistoryItem(
     onExport: (Workout) -> Unit,
 ) {
     val date = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
-        .format(Date(workout.startedAt))
+        .format(Date(workout.startedAtEpochMs))
     val status = when (workout.status) {
         "recording" -> "In progress"
         "completed" -> "Completed"
@@ -125,9 +125,9 @@ private fun WorkoutHistoryItem(
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(date, style = MaterialTheme.typography.titleMedium)
             Text(if (workout.partial) "$status · partial" else status)
-            Text("Duration: ${formatWorkoutDuration(workout.elapsed)}")
-            Text("Distance: ${workout.distance?.let { "${formatMetric("distance", it)} m" } ?: "—"}")
-            Text("Calories: ${workout.calories?.let { "${formatMetric("calories", it)} kcal" } ?: "—"}")
+            Text("Duration: ${formatWorkoutDuration(workout.elapsedS)}")
+            Text("Distance: ${workout.distanceM?.let { "${formatMetric("distanceM", it)} m" } ?: "—"}")
+            Text("Calories: ${workout.caloriesKcal?.let { "${formatMetric("caloriesKcal", it)} kcal" } ?: "—"}")
             if (HealthConnectExport.isEligible(workout)) {
                 OutlinedButton(
                     onClick = { onExport(workout) },

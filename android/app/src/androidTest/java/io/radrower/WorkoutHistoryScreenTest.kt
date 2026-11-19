@@ -28,17 +28,17 @@ class WorkoutHistoryScreenTest {
         timestamp: Long = 1_700_000_000_000,
     ) = Workout(
         id = id,
-        startedAt = timestamp,
-        startedOffsetSeconds = 0,
-        endedAt = timestamp + 3_723_000,
-        endedOffsetSeconds = 0,
-        lastSampleAt = timestamp,
-        lastSampleOffsetSeconds = 0,
+        startedAtEpochMs = timestamp,
+        startedOffsetS = 0,
+        endedAtEpochMs = timestamp + 3_723_000,
+        endedOffsetS = 0,
+        lastSampleAtEpochMs = timestamp,
+        lastSampleOffsetS = 0,
         status = "completed",
         partial = false,
-        elapsed = 3723.0,
-        distance = 1234.0,
-        calories = 42.0,
+        elapsedS = 3723.0,
+        distanceM = 1234.0,
+        caloriesKcal = 42.0,
     )
 
     @Test fun historyShowsDetailsAndUnavailableValues() {
@@ -47,9 +47,9 @@ class WorkoutHistoryScreenTest {
                 listOf(
                     workout("one"),
                     workout("two", 1_600_000_000_000).copy(
-                        elapsed = null,
-                        distance = null,
-                        calories = null,
+                        elapsedS = null,
+                        distanceM = null,
+                        caloriesKcal = null,
                         status = "interrupted",
                         partial = true,
                     ),
@@ -68,7 +68,7 @@ class WorkoutHistoryScreenTest {
                 "to avoid duplicate distance records.",
         ).assertIsDisplayed()
         compose.onNodeWithText("Duration: 1:02:03").assertIsDisplayed()
-        compose.onNodeWithText("Distance: ${formatMetric("distance", 1234.0)} m").assertIsDisplayed()
+        compose.onNodeWithText("Distance: ${formatMetric("distanceM", 1234.0)} m").assertIsDisplayed()
         compose.onNodeWithText("Calories: 42 kcal").assertIsDisplayed()
         compose.onNodeWithText("Interrupted · partial").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Duration: —").assertIsDisplayed()
@@ -81,7 +81,7 @@ class WorkoutHistoryScreenTest {
         val oldest =
             DateFormat
                 .getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
-                .format(Date(workouts.last().startedAt))
+                .format(Date(workouts.last().startedAtEpochMs))
         compose.setContent { WorkoutHistoryScreen(workouts, null, {}) }
         compose.onNodeWithTag("workoutHistory").performScrollToNode(hasText(oldest))
         compose.onNodeWithText(oldest).assertIsDisplayed()

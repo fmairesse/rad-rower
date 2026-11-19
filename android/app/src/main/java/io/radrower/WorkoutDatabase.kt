@@ -18,27 +18,25 @@ import kotlinx.coroutines.flow.Flow
 @Entity(tableName = "workouts")
 internal data class Workout(
     @PrimaryKey val id: String,
-    val startedAt: Long,
-    val startedOffsetSeconds: Int,
-    val endedAt: Long? = null,
-    val endedOffsetSeconds: Int? = null,
-    val lastSampleAt: Long,
-    val lastSampleOffsetSeconds: Int,
+    val startedAtEpochMs: Long,
+    val startedOffsetS: Int,
+    val endedAtEpochMs: Long? = null,
+    val endedOffsetS: Int? = null,
+    val lastSampleAtEpochMs: Long,
+    val lastSampleOffsetS: Int,
     val status: String = "recording",
     val partial: Boolean,
     val sampleCount: Int = 0,
-    val activeMillis: Long = 0,
-    val distance: Double? = null,
-    val calories: Double? = null,
-    val strokes: Double? = null,
-    val elapsed: Double? = null,
-    val paused: Double? = null,
-    val averageWatts: Double? = null,
-    val cadenceTotal: Double = 0.0,
-    val cadenceSamples: Int = 0,
-    val averageCadence: Double? = null,
-    val averageSpeed: Double? = null,
-    val averagePace: Double? = null,
+    val activeMs: Long = 0,
+    val distanceM: Double? = null,
+    val caloriesKcal: Double? = null,
+    val strokesCount: Double? = null,
+    val elapsedS: Double? = null,
+    val cadenceTotalSpm: Double = 0.0,
+    val cadenceSampleCount: Int = 0,
+    val averageCadenceSpm: Double? = null,
+    val averageSpeedKmh: Double? = null,
+    val averagePaceSPer500M: Double? = null,
 )
 
 @Entity(
@@ -55,9 +53,19 @@ internal data class Workout(
 internal data class WorkoutSample(
     val workoutId: String,
     val sequence: Int,
-    val timestamp: Long,
-    val offsetSeconds: Int,
-    val metricsJson: String,
+    val timestampEpochMs: Long,
+    val offsetS: Int,
+    val sessionState: Int,
+    val powerW: Double? = null,
+    val distanceM: Double? = null,
+    val resistanceLevel: Int,
+    val elapsedS: Double? = null,
+    val caloriesKcal: Double? = null,
+    val strokesCount: Double? = null,
+    val cadenceSpm: Double? = null,
+    val paceSPer500M: Double? = null,
+    val speedKmh: Double? = null,
+    val unvalidatedMetricsJson: String? = null,
 )
 
 @Dao
@@ -74,18 +82,18 @@ internal abstract class WorkoutDao {
         if (sample != null) insertSample(sample)
     }
 
-    @Query("SELECT * FROM workouts ORDER BY startedAt DESC")
+    @Query("SELECT * FROM workouts ORDER BY startedAtEpochMs DESC")
     abstract fun observeWorkouts(): Flow<List<Workout>>
 
-    @Query("SELECT * FROM workouts ORDER BY startedAt DESC")
+    @Query("SELECT * FROM workouts ORDER BY startedAtEpochMs DESC")
     abstract suspend fun workouts(): List<Workout>
 
     @Query("SELECT * FROM samples WHERE workoutId = :id ORDER BY sequence")
     abstract suspend fun samples(id: String): List<WorkoutSample>
 
     @Query("""
-        UPDATE workouts SET status = 'interrupted', endedAt = lastSampleAt,
-            endedOffsetSeconds = lastSampleOffsetSeconds
+        UPDATE workouts SET status = 'interrupted', endedAtEpochMs = lastSampleAtEpochMs,
+            endedOffsetS = lastSampleOffsetS
         WHERE status = 'recording'
     """)
     abstract suspend fun recoverInterrupted()

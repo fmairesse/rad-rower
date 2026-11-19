@@ -71,7 +71,10 @@ const RESISTANCE_LEVELS = new Map([
 const u16 = (bytes, offset) => bytes[offset] | (bytes[offset + 1] << 8);
 const u32 = (bytes, offset) => (u16(bytes, offset) + u16(bytes, offset + 2) * 65536);
 const startsWith = (bytes, prefix) => prefix.every((byte, i) => bytes[i] === byte);
-const paceFields = (pace) => ({ pace: pace || null, speed: pace ? 1800 / pace : 0 });
+const paceFields = (paceSPer500M) => ({
+  paceSPer500M: paceSPer500M || null,
+  speedKmh: paceSPer500M ? 1800 / paceSPer500M : 0,
+});
 
 export class MessageAssembler {
   constructor() {
@@ -122,21 +125,20 @@ export function decodeMessage(body) {
   if (startsWith(body, [0x01, 0x04, 0x02]) &&
       [0x2e, 0x30, 0x31].includes(body[3]) && body.length === body[3] + 4) {
     if (body.slice(10, 18).every((byte) => byte === 0xff)) {
-      return { watts: null, distance: null, resistance: null, sessionState: null,
-        elapsed: null, calories: null, averageWatts: null, paused: null, caloriesPerHour: null };
+      return { powerW: null, distanceM: null, resistanceLevel: null, sessionState: null,
+        elapsedS: null, caloriesKcal: null, averageWatts: null, paused: null, caloriesPerHour: null };
     }
-    const watts = u16(body, 10);
+    const powerW = u16(body, 10);
     const values = {
-      watts,
-      distance: u16(body, 12),
-      resistance: body[9] === 0 ? 1 :
-        (RESISTANCE_LEVELS.get(body[9]) ?? `? 0x${body[9].toString(16).padStart(2, "0")}`),
+      powerW,
+      distanceM: u16(body, 12),
+      resistanceLevel: body[9] === 0 ? 1 : (RESISTANCE_LEVELS.get(body[9]) ?? null),
     };
     if (body[3] === 0x2e) {
       Object.assign(values, {
-        sessionState: body[25], elapsed: u16(body, 21),
-        calories: u32(body, 34) / 100000, averageWatts: body[40], paused: body[45],
-        caloriesPerHour: watts ? Math.round(3.2438 * watts + 174.66) : null,
+        sessionState: body[25], elapsedS: u16(body, 21),
+        caloriesKcal: u32(body, 34) / 100000, averageWatts: body[40], paused: body[45],
+        caloriesPerHour: powerW ? Math.round(3.2438 * powerW + 174.66) : null,
       });
     }
     return values;
@@ -151,8 +153,8 @@ export function decodeMotionFrame(frame) {
   if (frame.length !== 20 || frame[0] !== 0xff || frame[1] !== 0x11 ||
       frame.slice(2, 10).some((byte) => byte !== 0)) return null;
   return {
-    strokes: u16(frame, 10),
-    cadence: frame[12],
+    strokesCount: u16(frame, 10),
+    cadenceSpm: frame[12],
     ...paceFields(u16(frame, 13)),
     averagePace: u16(frame, 15) || null,
   };

@@ -5,12 +5,12 @@ import { exportWorkout, GoogleHealth, HEALTH_SCOPE } from "./google-health.js";
 const session = {
   id: "a1b2c3d4-e5f6-7890-1234-567890abcdef", status: "completed", synced: false,
   startedAt: 100000, endedAt: 200000, partial: false,
-  metrics: { distance: 500, calories: 20, watts: 150, strokes: 30, cadence: 24 },
+  metrics: { distanceM: 500, caloriesKcal: 20, powerW: 150, strokesCount: 30, cadenceSpm: 24 },
 };
 const samples = [
-  { timestamp: 100000, metrics: { sessionState: 2, watts: 100 } },
-  { timestamp: 130000, metrics: { sessionState: 3, watts: null } },
-  { timestamp: 150000, metrics: { sessionState: 2, watts: 200 } },
+  { timestamp: 100000, metrics: { sessionState: 2, powerW: 100 } },
+  { timestamp: 130000, metrics: { sessionState: 3, powerW: null } },
+  { timestamp: 150000, metrics: { sessionState: 2, powerW: 200 } },
 ];
 
 test("exports rowing totals in Google units, pause events and extra metrics without inventing steps", () => {
@@ -20,8 +20,8 @@ test("exports rowing totals in Google units, pause events and extra metrics with
   assert.deepEqual(exercise.metricsSummary, { distanceMillimeters: 500000,
     averageSpeedMillimetersPerSecond: 6250, averagePaceSecondsPerMeter: 0.16, caloriesKcal: 20 });
   assert.deepEqual(exercise.exerciseEvents.map((event) => event.exerciseEventType), ["START", "PAUSE", "RESUME", "STOP"]);
-  assert.equal(JSON.parse(exercise.notes).rowerMetrics.strokes, 30);
-  assert.equal(JSON.parse(exercise.notes).sampledStatistics.watts.sampleMean, 150);
+  assert.equal(JSON.parse(exercise.notes).rowerMetrics.strokesCount, 30);
+  assert.equal(JSON.parse(exercise.notes).sampledStatistics.powerW.sampleMean, 150);
   assert.throws(() => exportWorkout({ ...session, status: "interrupted" }, samples));
 });
 

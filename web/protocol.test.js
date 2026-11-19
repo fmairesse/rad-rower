@@ -70,8 +70,8 @@ test("reassembles telemetry, ignores stale header padding and checks checksum", 
   for (const frame of frames.slice(0, -1)) assert.equal(assembler.feed(frame), null);
   const result = assembler.feed(frames.at(-1));
   assert.equal(result.checksumOk, true);
-  assert.deepEqual(decodeMessage(result.body), { watts: 300, distance: 1234, resistance: 24,
-    sessionState: 0, elapsed: 0, calories: 0, averageWatts: 0, paused: 0, caloriesPerHour: 1148 });
+  assert.deepEqual(decodeMessage(result.body), { powerW: 300, distanceM: 1234, resistanceLevel: 24,
+    sessionState: 0, elapsedS: 0, caloriesKcal: 0, averageWatts: 0, paused: 0, caloriesPerHour: 1148 });
   frames[1][12] ^= 1;
   let corrupted;
   for (const frame of frames) corrupted = assembler.feed(frame);
@@ -99,13 +99,13 @@ test("recovers after missing, out-of-order, truncated and oversized frames", () 
 test("decodes motion, zero pace and little-endian stroke count", () => {
   const frame = motionFrame();
   assert.deepEqual(decodeMotionFrame(frame), {
-    strokes: 37, cadence: 24, pace: 275, speed: 1800 / 275, averagePace: null,
+    strokesCount: 37, cadenceSpm: 24, paceSPer500M: 275, speedKmh: 1800 / 275, averagePace: null,
   });
   frame[11] = 1;
   frame[13] = 0;
   frame[14] = 0;
   assert.deepEqual(decodeMotionFrame(frame), {
-    strokes: 293, cadence: 24, pace: null, speed: 0, averagePace: null,
+    strokesCount: 293, cadenceSpm: 24, paceSPer500M: null, speedKmh: 0, averagePace: null,
   });
   frame[2] = 1;
   assert.equal(decodeMotionFrame(frame), null);
@@ -115,9 +115,9 @@ test("decodes motion, zero pace and little-endian stroke count", () => {
 test("handles unset, unknown and all validated resistance encodings without inventing levels", () => {
   const body = telemetryBody();
   body[9] = 0;
-  assert.equal(decodeMessage(body).resistance, 1);
+  assert.equal(decodeMessage(body).resistanceLevel, 1);
   body[9] = 0xff;
-  assert.equal(decodeMessage(body).resistance, "? 0xff");
+  assert.equal(decodeMessage(body).resistanceLevel, null);
   const rawLevels = [
     1, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 16, 17, 19, 20, 21, 22,
     24, 25, 26, 27, 29, 30, 32, 34, 35, 37, 38, 39,
@@ -128,11 +128,11 @@ test("handles unset, unknown and all validated resistance encodings without inve
   ];
   rawLevels.forEach((raw, index) => {
     body[9] = raw;
-    assert.equal(decodeMessage(body).resistance, expected[index]);
+    assert.equal(decodeMessage(body).resistanceLevel, expected[index]);
   });
   body.fill(0xff, 10, 18);
-  assert.deepEqual(decodeMessage(body), { watts: null, distance: null, resistance: null,
-    sessionState: null, elapsed: null, calories: null, averageWatts: null, paused: null, caloriesPerHour: null });
+  assert.deepEqual(decodeMessage(body), { powerW: null, distanceM: null, resistanceLevel: null,
+    sessionState: null, elapsedS: null, caloriesKcal: null, averageWatts: null, paused: null, caloriesPerHour: null });
 });
 
 test("decodes session telemetry and average pace using the Python offsets", () => {
@@ -141,9 +141,9 @@ test("decodes session telemetry and average pace using the Python offsets", () =
   body[34] = 0xa0; body[35] = 0x86; body[36] = 1;
   body[40] = 85; body[45] = 12;
   const values = decodeMessage(body);
-  assert.equal(values.elapsed, 300);
+  assert.equal(values.elapsedS, 300);
   assert.equal(values.sessionState, 3);
-  assert.equal(values.calories, 1);
+  assert.equal(values.caloriesKcal, 1);
   assert.equal(values.averageWatts, 85);
   assert.equal(values.paused, 12);
   assert.equal(values.caloriesPerHour, 1148);
@@ -159,7 +159,7 @@ test("handles alternate 33-byte pace messages and rejects unknown payloads", () 
   body.set([1, 4, 2, 0x1d, 0x14, 0x1d, 2, 2]);
   body[27] = 0x4a;
   body[28] = 1;
-  assert.deepEqual(decodeMessage(body), { pace: 330, speed: 1800 / 330 });
+  assert.deepEqual(decodeMessage(body), { paceSPer500M: 330, speedKmh: 1800 / 330 });
   assert.equal(decodeMessage(new Uint8Array()), null);
   assert.equal(decodeMessage(body.slice(0, 20)), null);
 });

@@ -6,12 +6,12 @@ const session = {
   id: "a1b2c3d4-e5f6-7890-1234-567890abcdef", status: "completed", synced: false,
   startedAt: Date.parse("2026-11-16T10:00:00Z"), endedAt: Date.parse("2026-11-16T10:02:00Z"),
   partial: false,
-  metrics: { distance: 500, calories: 20, averageWatts: 150, averageCadence: 24, strokes: 48 },
+  metrics: { distanceM: 500, caloriesKcal: 20, averageWatts: 150, averageCadenceSpm: 24, strokesCount: 48 },
 };
 const samples = [
-  { timestamp: session.startedAt, metrics: { sessionState: 2, watts: 100 } },
+  { timestamp: session.startedAt, metrics: { sessionState: 2, powerW: 100 } },
   { timestamp: session.startedAt + 30000, metrics: { sessionState: 3 } },
-  { timestamp: session.startedAt + 50000, metrics: { sessionState: 2, watts: 200 } },
+  { timestamp: session.startedAt + 50000, metrics: { sessionState: 2, powerW: 200 } },
 ];
 
 function fixture(responses) {
@@ -40,7 +40,7 @@ test("exports a completed indoor rowing activity with its local timestamps and p
   assert.equal(payload.average_watts, 150);
   assert.equal(payload.average_cadence, 24);
   assert.equal(payload.external_id, `radrower-${session.id}`);
-  assert.equal(JSON.parse(payload.description).rowerMetrics.strokes, 48);
+  assert.equal(JSON.parse(payload.description).rowerMetrics.strokesCount, 48);
   assert.throws(() => exportWorkout({ ...session, status: "interrupted" }, samples));
 });
 

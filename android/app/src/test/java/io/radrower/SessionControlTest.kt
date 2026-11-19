@@ -13,7 +13,20 @@ class SessionControlTest {
         assertNull(state.sessionState(6_001))
         assertNull(RowerUiState().sessionState(1_000))
         assertNull(RowerUiState(readings = mapOf("sessionState" to Reading(null, 1_000))).sessionState(1_000))
-        assertNull(RowerUiState(readings = mapOf("sessionState" to Reading(10, 1_000))).sessionState(1_000))
+        assertEquals(SessionState.IDLE, RowerUiState(readings = mapOf("sessionState" to Reading(10, 1_000))).sessionState(1_000))
+    }
+
+    @Test fun bluetoothNormalizationAlwaysProvidesResistanceAndMapsStateTenToIdle() {
+        val normalized = normalizeRowerMetrics(
+            values = mapOf("sessionState" to 10, "resistanceLevel" to null),
+            previousResistanceLevel = 12,
+        )
+        assertEquals(12, normalized.resistanceLevel)
+        assertEquals(12, normalized.values["resistanceLevel"])
+        assertEquals(SessionState.IDLE.code, normalized.values["sessionState"])
+
+        val initial = normalizeRowerMetrics(emptyMap(), previousResistanceLevel = 1)
+        assertEquals(1, initial.values["resistanceLevel"])
     }
 
     @Test fun commandsOnlyExistForValidStates() {
@@ -57,8 +70,8 @@ class SessionControlTest {
         }
 
     @Test fun formatsTimeAndUnavailableValues() {
-        assertEquals("5:03", formatMetric("pace", 303))
-        assertEquals("—", formatMetric("watts", null))
-        assertEquals("? 0xff", formatMetric("resistance", "? 0xff"))
+        assertEquals("5:03", formatMetric("paceSPer500M", 303))
+        assertEquals("—", formatMetric("powerW", null))
+        assertEquals("1", formatMetric("resistanceLevel", 1))
     }
 }

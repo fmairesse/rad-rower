@@ -164,7 +164,7 @@ octets 4 à avant-dernier, modulo 256.
 | --- | --- | --- | --- |
 | puissance (W) | message de 50 octets, corps | 10–11 LE | |
 | distance (m) | message de 50 octets, corps | 12–13 LE | |
-| résistance (niveau 1–24) | message de 50 octets, corps | 9, table de QZ | l’octet vaut 0 tant que la résistance n’a pas été changée sur le rameur (niveau inconnu) ; 1 après réglage. Par choix utilisateur, l’application Android et l’interface web interprètent désormais cet octet 0 comme le niveau supposé 1 ; les outils d’expérimentation conservent la valeur observée. |
+| résistance (niveau 1–24) | message de 50 octets, corps | 9, table de QZ | l’octet vaut 0 tant que la résistance n’a pas été changée sur le rameur (niveau inconnu) ; 1 après réglage. Par choix utilisateur, l’application Android et l’interface web interprètent désormais cet octet 0 comme le niveau supposé 1 ; les outils d’expérimentation conservent la valeur observée. La couche Bluetooth Android initialise aussi le niveau à 1 et conserve le dernier niveau numérique connu lorsque la trame est indisponible ou contient un encodage inconnu ; elle transmet donc toujours un `resistanceLevel` numérique à la couche de données. |
 | cadence (coups/min) | trame `ff 11` | 12 | |
 | nombre de coups | trame `ff 11` | 10–11 LE | trouvé sur notre rameur, absent de QZ ; 36 → 37 sur l’essai suivant |
 | allure (s pour 500 m) | trame `ff 11` | 13–14 LE | 275 s = 4:35 ; 330 s = 5:30 |
@@ -338,15 +338,30 @@ Confirmé par l’utilisateur : la console était alors en miles (unités
 impériales). L’explication d’un relevé décalé ne tient pas (une lecture tardive
 donnerait une valeur plus grande, pas plus petite).
 
-**État 10** (récit de l’utilisateur, non journalisé) : un premier lancement du
-script avait démarré le chrono, puis avait été tué avant d’envoyer la fin de
-session ; l’utilisateur n’a plus touché au rameur, qui a arrêté son chrono seul ;
-le lancement suivant (`session-4`) a lu l’état 10. Hypothèse : 10 = session
-terminée automatiquement par le rameur après inactivité (différent de 3, pause
-quand on arrête de ramer, et de 4, fin demandée). Le start envoyé ensuite a
-quand même été accepté (running en 1,6 s, temps et calories repartis de 0). À
-confirmer en laissant volontairement une session inactive en notant la durée
-avant le changement d’état.
+**État 10 (non validé ; hypothèse documentée)** : nous supposons qu’il signifie
+« session terminée automatiquement par le rameur après une longue inactivité ».
+Il serait distinct de l’état 3 (« pause automatique ou manuelle, session encore
+reprenable ») et de l’état 4 (« fin explicitement demandée »). Son comportement
+observé ressemble à celui d’un rameur prêt à repartir : les données de la session
+précédente restent lisibles, mais une commande de démarrage suivante est acceptée
+et remet le temps ainsi que les calories à zéro.
+
+**Faits observés** (récit de l’utilisateur, non journalisé) : un script avait
+lancé le chrono puis avait été interrompu sans envoyer de commande de fin.
+L’utilisateur n’a plus touché au rameur, dont le chrono s’est arrêté seul. Au
+redémarrage du programme (`session-4`), le corps de la télémétrie contenait l’état
+10, avec encore 298 s aux compteurs de temps sur 16 bits et environ 0,1 kcal. Un
+start a ensuite été accepté en 1,6 s, l’état est passé en marche et les compteurs
+ont recommencé à zéro. La durée d’inactivité nécessaire au passage à 10 n’a pas
+été mesurée.
+
+**Traitement Android** : comme 10 est traité comme une fin effective et n’a pas de
+commande de contrôle dédiée, la couche Bluetooth le normalise en `IDLE`
+(code 1) avant de transmettre la télémétrie. Cette conversion exprime le
+comportement opérationnel constaté ; elle ne valide pas la signification du code.
+Il faut encore confirmer l’hypothèse en laissant volontairement une session
+inactive, en notant le délai avant le passage à 10, puis la transition exacte et
+les compteurs produits avant/après un nouveau start.
 
 **En pause**, les octets de calories, distance, puissance et temps de marche
 (30) passent à 0 ou restent périmés dans le message, alors que la console les

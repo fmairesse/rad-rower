@@ -107,17 +107,17 @@ if (!globalThis.Vue) {
       const isStale = (key) => updated.value[key] &&
         (state.value !== "streaming" || now.value - updated.value[key] > 5000);
       const definitions = [
-        ["watts", "Power", "W"],
-        ["pace", "Pace / 500 m", "/ 500 m"],
+        ["powerW", "Power", "W"],
+        ["paceSPer500M", "Pace / 500 m", "/ 500 m"],
         ["averagePace", "Average pace", "/ 500 m"],
-        ["cadence", "Cadence", "strokes/min"],
-        ["distance", "Distance", "m"],
-        ["strokes", "Stroke count", "strokes"],
-        ["speed", "Speed", "km/h"],
-        ["resistance", "Resistance", "/ 24"],
-        ["elapsed", "Elapsed time", ""],
+        ["cadenceSpm", "Cadence", "strokes/min"],
+        ["distanceM", "Distance", "m"],
+        ["strokesCount", "Stroke count", "strokesCount"],
+        ["speedKmh", "Speed", "km/h"],
+        ["resistanceLevel", "Resistance", "/ 24"],
+        ["elapsedS", "Elapsed time", ""],
         ["paused", "Paused time", ""],
-        ["calories", "Calories", "kcal"],
+        ["caloriesKcal", "Calories", "kcal"],
         ["caloriesPerHour", "Estimated burn", "kcal/h"],
         ["averageWatts", "Average power", "W"],
       ];
@@ -126,13 +126,13 @@ if (!globalThis.Vue) {
         const value = metrics.value[key];
         const received = Boolean(updated.value[key]);
         let display = value == null ? "—" : typeof value === "number" ? number.format(value) : value;
-        if (["pace", "averagePace", "elapsed", "paused"].includes(key) && value != null) {
+        if (["paceSPer500M", "averagePace", "elapsedS", "paused"].includes(key) && value != null) {
           display = `${Math.floor(value / 60)}:${String(value % 60).padStart(2, "0")}`;
         }
         return {
           key, label, unit, value: display, stale: Boolean(isStale(key)),
           note: !received ? "Waiting for data" : isStale(key) ? "Last value · not up to date" :
-            key === "speed" ? "Calculated from pace" :
+            key === "speedKmh" ? "Calculated from pace" :
             key === "caloriesPerHour" ? "Estimated from power" :
             ["paused", "averagePace", "averageWatts"].includes(key) ? "Likely interpretation, not yet confirmed" :
             value == null ? "Value unavailable" : "Data from the rower",
@@ -145,7 +145,7 @@ if (!globalThis.Vue) {
             : "Metrics will appear after connecting.";
         }
         if (state.value !== "streaming") return "Preparing to read metrics…";
-        const required = ["watts", "cadence"];
+        const required = ["powerW", "cadenceSpm"];
         if (required.some((key) => !updated.value[key])) {
           return "Waiting for both groups of rower metrics…";
         }

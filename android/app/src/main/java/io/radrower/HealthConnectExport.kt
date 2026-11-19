@@ -14,7 +14,6 @@ import androidx.health.connect.client.units.kilocalories
 import androidx.health.connect.client.units.meters
 import androidx.health.connect.client.units.metersPerSecond
 import androidx.health.connect.client.units.watts
-import org.json.JSONObject
 import java.time.Instant
 import java.time.ZoneOffset
 
@@ -28,21 +27,21 @@ internal object HealthConnectExport {
     fun isEligible(workout: Workout): Boolean =
         workout.status == "completed" &&
             !workout.partial &&
-            workout.endedAt != null &&
-            workout.endedAt > workout.startedAt
+            workout.endedAtEpochMs != null &&
+            workout.endedAtEpochMs > workout.startedAtEpochMs
 
     fun permissionsFor(workout: Workout, samples: List<WorkoutSample> = emptyList()): Set<String> = buildSet {
         add(HealthPermission.getWritePermission(ExerciseSessionRecord::class))
-        if (workout.distance.isPositiveFinite()) {
+        if (workout.distanceM.isPositiveFinite()) {
             add(HealthPermission.getWritePermission(DistanceRecord::class))
         }
-        if (workout.calories.isPositiveFinite()) {
+        if (workout.caloriesKcal.isPositiveFinite()) {
             add(HealthPermission.getWritePermission(ActiveCaloriesBurnedRecord::class))
         }
-        if (activeMetricSamples(workout, samples, "watts").isNotEmpty()) {
+        if (activeMetricSamples(workout, samples) { it.powerW }.isNotEmpty()) {
             add(HealthPermission.getWritePermission(PowerRecord::class))
         }
-        if (activeMetricSamples(workout, samples, "speed").isNotEmpty()) {
+        if (activeMetricSamples(workout, samples) { it.speedKmh }.isNotEmpty()) {
             add(HealthPermission.getWritePermission(SpeedRecord::class))
         }
     }
@@ -51,11 +50,11 @@ internal object HealthConnectExport {
         require(isEligible(workout)) {
             "Only completed, non-partial workouts with a valid time range can be exported."
         }
-        val start = Instant.ofEpochMilli(workout.startedAt)
-        val end = Instant.ofEpochMilli(requireNotNull(workout.endedAt))
-        val startOffset = ZoneOffset.ofTotalSeconds(workout.startedOffsetSeconds)
+        val start = Instant.ofEpochMilli(workout.startedAtEpochMs)
+        val end = Instant.ofEpochMilli(requireNotNull(workout.endedAtEpochMs))
+        val startOffset = ZoneOffset.ofTotalSeconds(workout.startedOffsetS)
         val endOffset = ZoneOffset.ofTotalSeconds(
-            workout.endedOffsetSeconds ?: workout.lastSampleOffsetSeconds,
+            workout.endedOffsetS ?: workout.lastSampleOffsetS,
         )
         val sessionId = "radrower:${workout.id}:exercise"
         val records = mutableListOf<Record>(
@@ -69,28 +68,28 @@ internal object HealthConnectExport {
                 metadata = metadata(sessionId),
             ),
         )
-        workout.distance.takeIf { it.isPositiveFinite() }?.let { distance ->
+        workout.distanceM.takeIf { it.isPositiveFinite() }?.let { distanceM ->
             records += DistanceRecord(
                 startTime = start,
                 startZoneOffset = startOffset,
                 endTime = end,
                 endZoneOffset = endOffset,
-                distance = distance.meters,
+                distance = distanceM.meters,
                 metadata = metadata("radrower:${workout.id}:distance", clientRecordVersion = DISTANCE_RECORD_VERSION),
             )
         }
-        workout.calories.takeIf { it.isPositiveFinite() }?.let { calories ->
+        workout.caloriesKcal.takeIf { it.isPositiveFinite() }?.let { caloriesKcal ->
             records += ActiveCaloriesBurnedRecord(
                 startTime = start,
                 startZoneOffset = startOffset,
                 endTime = end,
                 endZoneOffset = endOffset,
-                energy = calories.kilocalories,
+                energy = caloriesKcal.kilocalories,
                 metadata = metadata("radrower:${workout.id}:active-calories"),
             )
         }
-        val powerSamples = activeMetricSamples(workout, samples, "watts").map { (timestamp, value) ->
-            PowerRecord.Sample(Instant.ofEpochMilli(timestamp), value.watts)
+        val powerSamples = activeMetricSamples(workout, samples) { it.powerW }.map { (timestampEpochMs, powerW) ->
+            PowerRecord.Sample(Instant.ofEpochMilli(timestampEpochMs), powerW.watts)
         }
         if (powerSamples.isNotEmpty()) {
             records += PowerRecord(
@@ -102,8 +101,8 @@ internal object HealthConnectExport {
                 metadata = metadata("radrower:${workout.id}:power"),
             )
         }
-        val speedSamples = activeMetricSamples(workout, samples, "speed").map { (timestamp, value) ->
-            SpeedRecord.Sample(Instant.ofEpochMilli(timestamp), (value / 3.6).metersPerSecond)
+        val speedSamples = activeMetricSamples(workout, samples) { it.speedKmh }.map { (timestampEpochMs, speedKmh) ->
+            SpeedRecord.Sample(Instant.ofEpochMilli(timestampEpochMs), (speedKmh / 3.6).metersPerSecond)
         }
         if (speedSamples.isNotEmpty()) {
             records += SpeedRecord(
@@ -132,20 +131,21 @@ internal object HealthConnectExport {
         records(workout, samples).chunked(MAX_RECORDS_PER_INSERT).forEach { client.insertRecords(it) }
     }
 
-    private fun activeMetricSamples(workout: Workout, samples: List<WorkoutSample>, key: String): Map<Long, Double> {
-        val startAt = workout.startedAt
-        val endAt = workout.endedAt ?: return emptyMap()
-        var sessionState: Int? = null
+    private fun activeMetricSamples(
+        workout: Workout,
+        samples: List<WorkoutSample>,
+        metric: (WorkoutSample) -> Double?,
+    ): Map<Long, Double> {
+        val startAtEpochMs = workout.startedAtEpochMs
+        val endAtEpochMs = workout.endedAtEpochMs ?: return emptyMap()
         val activeSamples = sortedMapOf<Long, Double>()
-        for ((_, _, timestamp, _, metricsJson) in samples.sortedBy { it.sequence }) {
-            val metrics = JSONObject(metricsJson)
-            if (metrics.has("sessionState") && !metrics.isNull("sessionState")) {
-                sessionState = metrics.optInt("sessionState", -1)
-            }
-            if (sessionState != 2 || timestamp !in startAt..endAt) continue
-            val value = (metrics.opt(key) as? Number)?.toDouble() ?: continue
+        for (sample in samples.sortedBy { it.sequence }) {
+            if (sample.sessionState != SessionState.IN_PROGRESS.code ||
+                sample.timestampEpochMs !in startAtEpochMs..endAtEpochMs
+            ) continue
+            val value = metric(sample) ?: continue
             if (value.isFinite() && value >= 0) {
-                activeSamples[timestamp] = value
+                activeSamples[sample.timestampEpochMs] = value
             }
         }
         return activeSamples

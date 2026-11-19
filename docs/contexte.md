@@ -20,6 +20,13 @@ user reported that the Android application worked perfectly in a test; the
 phone and exact test conditions were not specified.
 Workouts and timestamped samples are now stored locally in Room/SQLite, with
 interrupted-workout recovery and storage errors displayed in the dashboard.
+On 2026-11-19, the sample JSON payload was replaced by typed columns with
+unit-bearing names; schema version 1 was reset before release. `averageWatts`,
+`paused`, `caloriesPerHour` and `averagePace` remain exposed by the protocol and
+are persisted together in `unvalidatedMetricsJson`. The Bluetooth layer always
+provides a numeric resistance level (default 1, then the last valid level) and
+normalizes rower state 10 to `IDLE`. The same unit-bearing metric names and
+Bluetooth normalization are now used by the web application.
 The dashboard links to a separate workout history listing all saved sessions
 with start date/time, rower-reported elapsed time, distance, calories and status.
 Average speed and pace use the rower's cumulative distance and active elapsed

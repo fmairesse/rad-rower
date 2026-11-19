@@ -42,6 +42,27 @@ internal enum class ConnectionState { DISCONNECTED, SCANNING, CONNECTING, INITIA
 
 internal data class Reading(val value: Any?, val receivedAt: Long)
 
+internal data class NormalizedRowerMetrics(
+    val values: Map<String, Any?>,
+    val resistanceLevel: Int,
+)
+
+internal fun normalizeRowerMetrics(
+    values: Map<String, Any?>,
+    previousResistanceLevel: Int,
+): NormalizedRowerMetrics {
+    val resistanceLevel =
+        (values["resistanceLevel"] as? Number)
+            ?.toInt()
+            ?.takeIf { it in 1..24 }
+            ?: previousResistanceLevel
+    val normalized = values.toMutableMap().apply {
+        put("resistanceLevel", resistanceLevel)
+        if (this["sessionState"] == 10) put("sessionState", SessionState.IDLE.code)
+    }
+    return NormalizedRowerMetrics(normalized, resistanceLevel)
+}
+
 internal data class RowerUiState(
     val connection: ConnectionState = ConnectionState.DISCONNECTED,
     val readings: Map<String, Reading> = emptyMap(),
@@ -207,6 +228,7 @@ internal class RowerConnection(
         private var writer: BluetoothGattCharacteristic? = null
         private var lastNotification = 0L
         private var version = 0L
+        private var resistanceLevel = 1
         private val sessionUpdates = MutableStateFlow(0L)
 
         private val callback = object : BluetoothGattCallback() {
@@ -274,12 +296,14 @@ internal class RowerConnection(
         }
 
         private fun updateMetrics(values: Map<String, Any?>) {
-            onMetrics(values)
+            val normalized = normalizeRowerMetrics(values, resistanceLevel)
+            resistanceLevel = normalized.resistanceLevel
+            onMetrics(normalized.values)
             val now = SystemClock.elapsedRealtime()
             mutableState.value = mutableState.value.copy(
-                readings = mutableState.value.readings + values.mapValues { Reading(it.value, now) }
+                readings = mutableState.value.readings + normalized.values.mapValues { Reading(it.value, now) },
             )
-            if ("sessionState" in values) {
+            if ("sessionState" in normalized.values) {
                 version++
                 sessionUpdates.value = version
             }

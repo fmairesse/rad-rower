@@ -281,19 +281,19 @@ private data class MetricDefinition(
 
 private val metrics =
     listOf(
-        MetricDefinition("watts", "Power", "W"),
-        MetricDefinition("elapsed", "Elapsed time", ""),
-        MetricDefinition("distance", "Distance", "m"),
-        MetricDefinition("pace", "Pace", "/ 500 m"),
-        MetricDefinition("averagePace", "Average pace", "/ 500 m", ""),
-        MetricDefinition("cadence", "Cadence", "str/min"),
-        MetricDefinition("strokes", "Stroke count", "strokes"),
-        MetricDefinition("speed", "Speed", "km/h", "Calculated from pace"),
-        MetricDefinition("resistance", "Resistance", "/ 24"),
-        MetricDefinition("paused", "Paused time", "", ""),
-        MetricDefinition("calories", "Calories", "kcal"),
-        MetricDefinition("caloriesPerHour", "Estimated burn", "kcal/h", "Estimated from power"),
-        MetricDefinition("averageWatts", "Average power", "W", ""),
+        MetricDefinition("powerW", "Power", "W"),
+        MetricDefinition("elapsedS", "Elapsed time", ""),
+        MetricDefinition("distanceM", "Distance", "m"),
+        MetricDefinition("paceSPer500M", "Pace", "/ 500 m"),
+        MetricDefinition("averagePace", "Average pace", "/ 500 m", "Unvalidated metric"),
+        MetricDefinition("cadenceSpm", "Cadence", "str/min"),
+        MetricDefinition("strokesCount", "Stroke count", "strokes"),
+        MetricDefinition("speedKmh", "Speed", "km/h", "Calculated from pace"),
+        MetricDefinition("resistanceLevel", "Resistance", "/ 24"),
+        MetricDefinition("caloriesKcal", "Calories", "kcal"),
+        MetricDefinition("paused", "Paused time", "", "Unvalidated metric"),
+        MetricDefinition("caloriesPerHour", "Estimated burn", "kcal/h", "Unvalidated metric"),
+        MetricDefinition("averageWatts", "Average power", "W", "Unvalidated metric"),
     )
 
 @Composable
@@ -461,7 +461,8 @@ internal fun RowerScreen(
                                     when {
                                         reading == null -> "Waiting for data"
                                         stale -> "Last value · not up to date"
-                                        reading.value == null && definition.key == "resistance" -> "Level not reported by the rower"
+                                        reading.value == null && definition.key == "resistanceLevel" ->
+                                            "Level not reported by the rower"
                                         reading.value == null -> "Value unavailable"
                                         definition.note.isNotEmpty() -> definition.note
                                         else -> "Data from the rower"
@@ -518,17 +519,17 @@ private fun RowerScreenActiveWorkoutPreview() {
                     readings =
                         mapOf(
                             "sessionState" to Reading(2, now),
-                            "watts" to Reading(142, now),
-                            "pace" to Reading(132, now),
+                            "powerW" to Reading(142, now),
+                            "paceSPer500M" to Reading(132, now),
                             "averagePace" to Reading(145, now),
-                            "cadence" to Reading(26, now),
-                            "distance" to Reading(1_250, now),
-                            "strokes" to Reading(68, now),
-                            "speed" to Reading(13.6, now),
-                            "resistance" to Reading(12, now),
-                            "elapsed" to Reading(310, now),
+                            "cadenceSpm" to Reading(26, now),
+                            "distanceM" to Reading(1_250, now),
+                            "strokesCount" to Reading(68, now),
+                            "speedKmh" to Reading(13.6, now),
+                            "resistanceLevel" to Reading(12, now),
+                            "elapsedS" to Reading(310, now),
+                            "caloriesKcal" to Reading(42, now),
                             "paused" to Reading(0, now),
-                            "calories" to Reading(42, now),
                             "caloriesPerHour" to Reading(487, now),
                             "averageWatts" to Reading(136, now),
                         ),
@@ -551,7 +552,7 @@ internal fun formatMetric(
 ): String {
     if (value == null) return "—"
     if (value is Number) {
-        if (key in listOf("pace", "averagePace", "elapsed", "paused")) {
+        if (key in listOf("paceSPer500M", "averagePace", "elapsedS", "paused")) {
             val seconds = value.toInt()
             return "%d:%02d".format(seconds / 60, seconds % 60)
         }

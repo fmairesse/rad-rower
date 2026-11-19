@@ -9,24 +9,24 @@ const localDateTime = (timestamp) => {
   return `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}:${values.second}`;
 };
 
-function activeDurationSeconds(session, samples) {
-  let pauseStarted = null;
-  let pausedMilliseconds = 0;
+function activeDurationS(session, samples) {
+  let pauseStartedEpochMs = null;
+  let pausedMs = 0;
   let previousState = 2;
   for (const sample of samples) {
     const state = sample.metrics.sessionState;
-    if (state === 3 && previousState !== 3) pauseStarted = sample.timestamp;
-    if (state === 2 && previousState === 3 && pauseStarted !== null) {
-      pausedMilliseconds += sample.timestamp - pauseStarted;
-      pauseStarted = null;
+    if (state === 3 && previousState !== 3) pauseStartedEpochMs = sample.timestamp;
+    if (state === 2 && previousState === 3 && pauseStartedEpochMs !== null) {
+      pausedMs += sample.timestamp - pauseStartedEpochMs;
+      pauseStartedEpochMs = null;
     }
     if ([2, 3].includes(state)) previousState = state;
   }
-  if (pauseStarted !== null) pausedMilliseconds += session.endedAt - pauseStarted;
-  if (pausedMilliseconds === 0 && Number.isFinite(session.metrics.paused)) {
-    pausedMilliseconds = session.metrics.paused * 1000;
+  if (pauseStartedEpochMs !== null) pausedMs += session.endedAt - pauseStartedEpochMs;
+  if (pausedMs === 0 && Number.isFinite(session.metrics.paused)) {
+    pausedMs = session.metrics.paused * 1000;
   }
-  return Math.max(0, (session.endedAt - session.startedAt - pausedMilliseconds) / 1000);
+  return Math.max(0, (session.endedAt - session.startedAt - pausedMs) / 1000);
 }
 
 export function exportWorkout(session, samples) {
@@ -34,11 +34,11 @@ export function exportWorkout(session, samples) {
     throw new Error("Only completed workouts with a positive duration can be exported.");
   }
   const metrics = session.metrics || {};
-  const movingTime = activeDurationSeconds(session, samples);
-  const distance = Number.isFinite(metrics.distance) ? metrics.distance : undefined;
+  const movingTimeS = activeDurationS(session, samples);
+  const distanceM = Number.isFinite(metrics.distanceM) ? metrics.distanceM : undefined;
   const averageWatts = Number.isFinite(metrics.averageWatts) ? metrics.averageWatts : undefined;
-  const averageCadence = Number.isFinite(metrics.averageCadence) ? metrics.averageCadence : undefined;
-  const calories = Number.isFinite(metrics.calories) ? metrics.calories : undefined;
+  const averageCadenceSpm = Number.isFinite(metrics.averageCadenceSpm) ? metrics.averageCadenceSpm : undefined;
+  const caloriesKcal = Number.isFinite(metrics.caloriesKcal) ? metrics.caloriesKcal : undefined;
   return {
     start_date_local: localDateTime(session.startedAt),
     type: "Rowing",
@@ -51,11 +51,11 @@ export function exportWorkout(session, samples) {
     trainer: true,
     external_id: `radrower-${session.id}`,
     elapsed_time: Math.round((session.endedAt - session.startedAt) / 1000),
-    moving_time: Math.round(movingTime),
-    ...(distance !== undefined ? { distance } : {}),
+    moving_time: Math.round(movingTimeS),
+    ...(distanceM !== undefined ? { distance: distanceM } : {}),
     ...(averageWatts !== undefined ? { average_watts: averageWatts, device_watts: true } : {}),
-    ...(averageCadence !== undefined ? { average_cadence: averageCadence } : {}),
-    ...(calories !== undefined ? { calories } : {}),
+    ...(averageCadenceSpm !== undefined ? { average_cadence: averageCadenceSpm } : {}),
+    ...(caloriesKcal !== undefined ? { calories: caloriesKcal } : {}),
   };
 }
 

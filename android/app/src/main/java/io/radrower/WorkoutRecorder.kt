@@ -20,14 +20,14 @@ internal class WorkoutRecorder(
     private sealed interface Event {
         data class Metrics(
             val values: Map<String, Any?>,
-            val timestamp: Long,
-            val monotonic: Long,
-            val offsetSeconds: Int,
+            val timestampEpochMs: Long,
+            val monotonicMs: Long,
+            val offsetS: Int,
         ) : Event
 
         data class Disconnect(
-            val timestamp: Long,
-            val offsetSeconds: Int,
+            val timestampEpochMs: Long,
+            val offsetS: Int,
         ) : Event
     }
 
@@ -36,7 +36,7 @@ internal class WorkoutRecorder(
     val error: StateFlow<String?> = mutableError
     private var current: Workout? = null
     private var rowerState: Int? = null
-    private var lastMonotonic: Long? = null
+    private var lastMonotonicMs: Long? = null
 
     init {
         scope.launch {
@@ -60,7 +60,7 @@ internal class WorkoutRecorder(
                     if (event is Event.Disconnect) {
                         current = null
                         rowerState = null
-                        lastMonotonic = null
+                        lastMonotonicMs = null
                     }
                 }
             }
@@ -88,83 +88,105 @@ internal class WorkoutRecorder(
             previous ?: if (state == 2 || state == 3) {
                 Workout(
                     id = UUID.randomUUID().toString(),
-                    startedAt = event.timestamp,
-                    startedOffsetSeconds = event.offsetSeconds,
-                    lastSampleAt = event.timestamp,
-                    lastSampleOffsetSeconds = event.offsetSeconds,
+                    startedAtEpochMs = event.timestampEpochMs,
+                    startedOffsetS = event.offsetS,
+                    lastSampleAtEpochMs = event.timestampEpochMs,
+                    lastSampleOffsetS = event.offsetS,
                     partial =
                         state == 3 ||
-                            (rowerState != 1 && ((event.values["elapsed"] as? Number)?.toDouble() ?: 0.0) > 2),
+                            (rowerState != 1 && ((event.values["elapsedS"] as? Number)?.toDouble() ?: 0.0) > 2),
                 )
             } else {
                 return
             }
-        val sampleState = state ?: rowerState
-        val activeMillis =
-            workout.activeMillis +
-                if (previous != null && rowerState == 2 && lastMonotonic != null) {
-                    max(0, event.monotonic - requireNotNull(lastMonotonic))
+        val sampleState = requireNotNull(state ?: rowerState)
+        val activeMs =
+            workout.activeMs +
+                if (previous != null && rowerState == 2 && lastMonotonicMs != null) {
+                    max(0, event.monotonicMs - requireNotNull(lastMonotonicMs))
                 } else {
                     0
                 }
+
+        fun metric(key: String): Double? =
+            (event.values[key] as? Number)
+                ?.toDouble()
+                ?.takeIf { it.isFinite() }
 
         fun counter(
             key: String,
             old: Double?,
         ): Double? {
-            val value = (event.values[key] as? Number)?.toDouble()
-            return if (value != null && value.isFinite() && value >= 0) max(old ?: 0.0, value) else old
+            val value = metric(key)
+            return if (value != null && value >= 0) max(old ?: 0.0, value) else old
         }
-        val cadence = (event.values["cadence"] as? Number)?.toDouble()
-        val validCadence = cadence != null && cadence.isFinite() && cadence > 0 && sampleState == 2
-        val cadenceTotal = workout.cadenceTotal + if (validCadence) cadence else 0.0
-        val cadenceSamples = workout.cadenceSamples + if (validCadence) 1 else 0
-        val distance = counter("distance", workout.distance)
-        val elapsed = counter("elapsed", workout.elapsed)
-        val averageWatts =
-            (event.values["averageWatts"] as? Number)
-                ?.toDouble()
-                ?.takeIf { it.isFinite() && it > 0 } ?: workout.averageWatts
+
+        val cadenceSpm = metric("cadenceSpm")
+        val validCadence = cadenceSpm != null && cadenceSpm > 0 && sampleState == 2
+        val cadenceTotalSpm = workout.cadenceTotalSpm + if (validCadence) cadenceSpm else 0.0
+        val cadenceSampleCount = workout.cadenceSampleCount + if (validCadence) 1 else 0
+        val distanceM = counter("distanceM", workout.distanceM)
+        val elapsedS = counter("elapsedS", workout.elapsedS)
         val hasAverage =
             !workout.partial &&
-                distance != null && distance > 0 &&
-                elapsed != null && elapsed > 0
-        val finished = state in listOf(1, 4, 10)
+                distanceM != null && distanceM > 0 &&
+                elapsedS != null && elapsedS > 0
+        val finished = state in listOf(1, 4)
+        val resistanceLevel = (event.values["resistanceLevel"] as? Number)?.toInt()
+        require(resistanceLevel != null && resistanceLevel in 1..24) {
+            "Bluetooth telemetry must provide a numeric resistance level."
+        }
         val next =
             workout.copy(
-                lastSampleAt = event.timestamp,
-                lastSampleOffsetSeconds = event.offsetSeconds,
-                endedAt = if (finished) event.timestamp else null,
-                endedOffsetSeconds = if (finished) event.offsetSeconds else null,
+                lastSampleAtEpochMs = event.timestampEpochMs,
+                lastSampleOffsetS = event.offsetS,
+                endedAtEpochMs = if (finished) event.timestampEpochMs else null,
+                endedOffsetS = if (finished) event.offsetS else null,
                 status = if (finished) "completed" else "recording",
                 sampleCount = workout.sampleCount + 1,
-                activeMillis = activeMillis,
-                distance = distance,
-                calories = counter("calories", workout.calories),
-                strokes = counter("strokes", workout.strokes),
-                elapsed = elapsed,
-                paused = counter("paused", workout.paused),
-                averageWatts = averageWatts,
-                cadenceTotal = cadenceTotal,
-                cadenceSamples = cadenceSamples,
-                averageCadence = if (cadenceSamples > 0) round2(cadenceTotal / cadenceSamples) else null,
-                averageSpeed = if (hasAverage) round2(distance / elapsed * 3.6) else null,
-                averagePace = if (hasAverage) round2(elapsed * 500 / distance) else null,
+                activeMs = activeMs,
+                distanceM = distanceM,
+                caloriesKcal = counter("caloriesKcal", workout.caloriesKcal),
+                strokesCount = counter("strokesCount", workout.strokesCount),
+                elapsedS = elapsedS,
+                cadenceTotalSpm = cadenceTotalSpm,
+                cadenceSampleCount = cadenceSampleCount,
+                averageCadenceSpm =
+                    if (cadenceSampleCount > 0) round2(cadenceTotalSpm / cadenceSampleCount) else null,
+                averageSpeedKmh = if (hasAverage) round2(distanceM / elapsedS * 3.6) else null,
+                averagePaceSPer500M = if (hasAverage) round2(elapsedS * 500 / distanceM) else null,
             )
-        val json = JSONObject()
-        for ((key, value) in event.values) {
-            if (key == "averagePace" || key == "caloriesPerHour") continue
-            when (value) {
-                null -> json.put(key, JSONObject.NULL)
-                is Number, is String -> json.put(key, value)
-                else -> error("Unsupported workout metric: $key")
+        val unvalidatedMetrics = JSONObject()
+        listOf("averageWatts", "paused", "caloriesPerHour", "averagePace").forEach { key ->
+            if (key in event.values) {
+                when (val value = event.values[key]) {
+                    null -> unvalidatedMetrics.put(key, JSONObject.NULL)
+                    is Number -> unvalidatedMetrics.put(key, value)
+                    else -> error("Unsupported unvalidated workout metric: $key")
+                }
             }
         }
-        val sample = WorkoutSample(workout.id, workout.sampleCount, event.timestamp, event.offsetSeconds, json.toString())
+        val sample = WorkoutSample(
+            workoutId = workout.id,
+            sequence = workout.sampleCount,
+            timestampEpochMs = event.timestampEpochMs,
+            offsetS = event.offsetS,
+            sessionState = sampleState,
+            powerW = metric("powerW"),
+            distanceM = metric("distanceM"),
+            resistanceLevel = resistanceLevel,
+            elapsedS = metric("elapsedS"),
+            caloriesKcal = metric("caloriesKcal"),
+            strokesCount = metric("strokesCount"),
+            cadenceSpm = cadenceSpm,
+            paceSPer500M = metric("paceSPer500M"),
+            speedKmh = metric("speedKmh"),
+            unvalidatedMetricsJson = unvalidatedMetrics.takeIf { it.length() > 0 }?.toString(),
+        )
         dao.save(next, sample)
         current = if (finished) null else next
         rowerState = if (finished) null else state ?: rowerState
-        lastMonotonic = if (finished) null else event.monotonic
+        lastMonotonicMs = if (finished) null else event.monotonicMs
     }
 
     private suspend fun interrupt(event: Event.Disconnect) {
@@ -172,14 +194,14 @@ internal class WorkoutRecorder(
         dao.save(
             workout.copy(
                 status = "interrupted",
-                endedAt = event.timestamp,
-                endedOffsetSeconds = event.offsetSeconds,
+                endedAtEpochMs = event.timestampEpochMs,
+                endedOffsetS = event.offsetS,
             ),
             null,
         )
         current = null
         rowerState = null
-        lastMonotonic = null
+        lastMonotonicMs = null
     }
 
     private fun offsetAt(timestamp: Long): Int = TimeZone.getDefault().getOffset(timestamp) / 1000

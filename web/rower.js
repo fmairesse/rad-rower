@@ -3,6 +3,16 @@ import {
   MessageAssembler, decodeMessage, decodeMotionFrame,
 } from "./protocol.js";
 
+export function normalizeMetrics(metrics, previousResistanceLevel = 1) {
+  const resistanceLevel = Number.isInteger(metrics.resistanceLevel) &&
+    metrics.resistanceLevel >= 1 && metrics.resistanceLevel <= 24
+    ? metrics.resistanceLevel
+    : previousResistanceLevel;
+  const normalized = { ...metrics, resistanceLevel };
+  if (normalized.sessionState === 10) normalized.sessionState = 1;
+  return { metrics: normalized, resistanceLevel };
+}
+
 const wait = (milliseconds, signal) => new Promise((resolve, reject) => {
   if (signal.aborted) {
     reject(signal.reason);
@@ -51,6 +61,7 @@ export class RowerConnection {
       stateAt: 0,
       controlling: false,
       ready: false,
+      resistanceLevel: 1,
     };
     this.session = session;
     this.onState("connecting");
@@ -110,7 +121,7 @@ export class RowerConnection {
       return;
     }
     const motion = decodeMotionFrame(frame);
-    if (motion) this.onMetrics(motion);
+    if (motion) this.publishMetrics(session, motion);
     const message = session.assembler.feed(frame);
     if (!message) return;
     if (!message.checksumOk) {
@@ -118,14 +129,19 @@ export class RowerConnection {
       return;
     }
     const metrics = decodeMessage(message.body);
-    if (metrics) {
-      if (Object.hasOwn(metrics, "sessionState")) {
-        session.rowerState = metrics.sessionState;
-        session.stateAt = performance.now();
-        session.stateVersion += 1;
-      }
-      this.onMetrics(metrics);
+    if (metrics) this.publishMetrics(session, metrics);
+  }
+
+  publishMetrics(session, values) {
+    const normalized = normalizeMetrics(values, session.resistanceLevel);
+    session.resistanceLevel = normalized.resistanceLevel;
+    const metrics = normalized.metrics;
+    if (Object.hasOwn(metrics, "sessionState")) {
+      session.rowerState = metrics.sessionState;
+      session.stateAt = performance.now();
+      session.stateVersion += 1;
     }
+    this.onMetrics(metrics);
   }
 
   send(session, frames) {

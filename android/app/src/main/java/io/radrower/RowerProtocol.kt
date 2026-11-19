@@ -62,9 +62,9 @@ internal object RowerProtocol {
     private fun ByteArray.startsWith(vararg prefix: Int) =
         size >= prefix.size && prefix.indices.all { u8(it) == prefix[it] }
 
-    private fun paceFields(pace: Int): Map<String, Any?> = mapOf(
-        "pace" to pace.takeIf { it != 0 },
-        "speed" to if (pace != 0) 1800.0 / pace else 0.0,
+    private fun paceFields(paceSPer500M: Int): Map<String, Any?> = mapOf(
+        "paceSPer500M" to paceSPer500M.takeIf { it != 0 },
+        "speedKmh" to if (paceSPer500M != 0) 1800.0 / paceSPer500M else 0.0,
     )
 
     fun decodeMessage(body: ByteArray): Map<String, Any?>? {
@@ -72,24 +72,27 @@ internal object RowerProtocol {
             body.u8(3) in listOf(0x2e, 0x30, 0x31) && body.size == body.u8(3) + 4
         ) {
             if ((10..17).all { body.u8(it) == 0xff }) {
-                return listOf("watts", "distance", "resistance", "sessionState", "elapsed",
-                    "calories", "averageWatts", "paused", "caloriesPerHour").associateWith { null }
+                return listOf(
+                    "powerW", "distanceM", "resistanceLevel", "sessionState", "elapsedS",
+                    "caloriesKcal", "averageWatts", "paused", "caloriesPerHour",
+                ).associateWith { null }
             }
-            val watts = body.u16(10)
-            val raw = body.u8(9)
+            val powerW = body.u16(10)
+            val rawResistance = body.u8(9)
             val values = mutableMapOf<String, Any?>(
-                "watts" to watts,
-                "distance" to body.u16(12),
-                "resistance" to if (raw == 0) 1 else resistanceLevels[raw] ?: "? 0x%02x".format(raw),
+                "powerW" to powerW,
+                "distanceM" to body.u16(12),
+                "resistanceLevel" to if (rawResistance == 0) 1 else resistanceLevels[rawResistance],
             )
             if (body.u8(3) == 0x2e) {
                 values.putAll(mapOf(
                     "sessionState" to body.u8(25),
-                    "elapsed" to body.u16(21),
-                    "calories" to body.u32(34) / 100000.0,
+                    "elapsedS" to body.u16(21),
+                    "caloriesKcal" to body.u32(34) / 100000.0,
                     "averageWatts" to body.u8(40),
                     "paused" to body.u8(45),
-                    "caloriesPerHour" to if (watts != 0) (3.2438 * watts + 174.66).roundToInt() else null,
+                    "caloriesPerHour" to
+                        if (powerW != 0) (3.2438 * powerW + 174.66).roundToInt() else null,
                 ))
             }
             return values
@@ -105,8 +108,8 @@ internal object RowerProtocol {
             (2..9).any { frame.u8(it) != 0 }
         ) return null
         return mapOf(
-            "strokes" to frame.u16(10),
-            "cadence" to frame.u8(12),
+            "strokesCount" to frame.u16(10),
+            "cadenceSpm" to frame.u8(12),
             "averagePace" to frame.u16(15).takeIf { it != 0 },
         ) + paceFields(frame.u16(13))
     }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { RowerConnection } from "./rower.js";
+import { normalizeMetrics, RowerConnection } from "./rower.js";
 import { SETUP, POLL, SERVICE_UUID, WRITE_UUID, NOTIFY_UUID } from "./protocol.js";
 
 function fixture({ requestError, writeError, connectGate } = {}) {
@@ -132,6 +132,13 @@ test("subscribes before exact init, alternates complete polls, stops and reconne
   assert.equal(f.events.at(-1), "streaming");
 });
 
+test("normalizes resistance and automatic-stop state before publishing metrics", () => {
+  const normalized = normalizeMetrics({ sessionState: 10, resistanceLevel: null }, 12);
+  assert.equal(normalized.metrics.sessionState, 1);
+  assert.equal(normalized.metrics.resistanceLevel, 12);
+  assert.equal(normalizeMetrics({}, 1).metrics.resistanceLevel, 1);
+});
+
 test("decodes offset DataViews, ignores invalid checksums and surfaces malformed notifications", async (t) => {
   const f = fixture();
   t.after(() => f.connection.disconnect());
@@ -152,8 +159,8 @@ test("decodes offset DataViews, ignores invalid checksums and surfaces malformed
     Uint8Array.from([0xff, 14, ...body.slice(36), ...new Uint8Array(4)]),
   ];
   frames.forEach((frame) => emit(f.notify, frame));
-  assert.deepEqual(f.metrics, [{ watts: 100, distance: 42, resistance: 2, sessionState: 0,
-    elapsed: 0, calories: 0, averageWatts: 0, paused: 0, caloriesPerHour: 499 }]);
+  assert.deepEqual(f.metrics, [{ powerW: 100, distanceM: 42, resistanceLevel: 2, sessionState: 0,
+    elapsedS: 0, caloriesKcal: 0, averageWatts: 0, paused: 0, caloriesPerHour: 499 }]);
   frames.at(-1)[15] ^= 1;
   frames.forEach((frame) => emit(f.notify, frame));
   assert.equal(f.metrics.length, 1);

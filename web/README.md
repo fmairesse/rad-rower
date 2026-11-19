@@ -62,11 +62,13 @@ Reconnection is manual; the page never reconnects or selects a device silently.
 
 The page displays power, distance, resistance, cadence, stroke count, pace,
 speed, elapsed time, calories, estimated calories per hour, average power,
-paused time and average pace. Speed is `1800 / pace_seconds`; calories per
-hour is an empirical estimate from power, unavailable at zero power. Paused
-time and average power are probable interpretations, not yet validated live.
-The live field named average pace is also unverified; the stored session
-average is instead calculated from distance and active duration.
+paused time and average pace. Metric keys carry their units: `powerW`,
+`distanceM`, `resistanceLevel`, `cadenceSpm`, `strokesCount`, `paceSPer500M`,
+`speedKmh`, `elapsedS`, and `caloriesKcal`. Speed is `1800 / paceSPer500M`;
+calories per hour is an empirical estimate from power, unavailable at zero
+power. `paused`, `averageWatts`, `caloriesPerHour`, and the live `averagePace`
+remain provisional interpretations. Calculated session summaries use
+`averageCadenceSpm`, `averageSpeedKmh`, and `averagePaceSPer500M`.
 Some values may temporarily be unavailable during a pause; the page does not
 reconstruct cumulative distance or calories for display from earlier readings.
 
@@ -85,9 +87,13 @@ reconstruct cumulative distance or calories for display from earlier readings.
   required confirmation stops the sequence; check the console before retrying.
   No resistance command is included.
 - A zero resistance byte (not yet reported by the rower) is **assumed to be
-  level 1**, a user-chosen assumption rather than a measurement. Unknown nonzero
-  encodings are shown as hexadecimal rather than guessed. A zero pace is
-  unavailable; the derived speed is zero.
+  level 1**, a user-chosen assumption rather than a measurement. The connection
+  layer starts at level 1, retains the last numeric level for unavailable or
+  unknown encodings, and always publishes a numeric `resistanceLevel`. A zero
+  pace is unavailable; the derived speed is zero.
+- The unvalidated rower state 10, assumed to mean automatic session termination
+  after inactivity, is normalized to `IDLE` (code 1) before metrics reach the UI
+  and recorder. See `docs/protocole-ble.md` for the evidence and limitations.
 - Messages with the all-`ff` no-data sentinel clear the corresponding values.
   Reassembled messages with a bad checksum are **discarded with a warning**,
   unlike the Python diagnostic script which prints them with `checksum=BAD`.
@@ -113,14 +119,15 @@ status (`recording`, `completed`, `interrupted`), cumulative totals and session
 averages, sample count, a `partial` flag for workouts joined in progress, and
 `synced` (initially `false`). The separate `samples` store holds received
 metric deltas with a timestamp and sequence number, including unavailable
-(`null`) values and pause/resume states. Estimated calories per hour and the
-unverified field previously named `averagePace` are omitted. It is indexed by
-session UUID for future charts. No Bluetooth identifiers are stored.
+(`null`) values and pause/resume states. Provisional fields `averageWatts`,
+`paused`, `caloriesPerHour`, and `averagePace` remain in the flexible sample
+metrics alongside the validated, unit-bearing keys. It is indexed by session
+UUID for future charts. No Bluetooth identifiers are stored.
 
-Session summaries keep the highest observed distance, calories, strokes,
-elapsed and paused counters, so terminal resets do not erase totals. Average
-cadence is the arithmetic mean of nonzero samples while active. Average speed
-and pace are calculated from distance and timestamped active duration for
+Session summaries keep the highest observed `distanceM`, `caloriesKcal`,
+`strokesCount`, and `elapsedS` counters, so terminal resets do not erase totals.
+Average cadence is the arithmetic mean of nonzero samples while active. Average
+speed and pace are calculated from distance and timestamped active duration for
 complete sessions; they are omitted for partial sessions.
 
 Each notification is saved asynchronously in an atomic transaction. Stop or a

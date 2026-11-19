@@ -1,5 +1,30 @@
-const SUMMARY_COUNTERS = ["distance", "calories", "strokes", "elapsed", "paused"];
-const OMITTED_SAMPLE_METRICS = new Set(["averagePace", "caloriesPerHour"]);
+const SUMMARY_COUNTERS = ["distanceM", "caloriesKcal", "strokesCount", "elapsedS"];
+const LEGACY_METRIC_KEYS = {
+  watts: "powerW",
+  distance: "distanceM",
+  resistance: "resistanceLevel",
+  elapsed: "elapsedS",
+  calories: "caloriesKcal",
+  strokes: "strokesCount",
+  cadence: "cadenceSpm",
+  pace: "paceSPer500M",
+  speed: "speedKmh",
+  averageCadence: "averageCadenceSpm",
+  averageSpeed: "averageSpeedKmh",
+};
+
+function normalizeStoredMetrics(metrics) {
+  return Object.fromEntries(Object.entries(metrics || {}).map(([key, value]) =>
+    [LEGACY_METRIC_KEYS[key] ?? key, value]));
+}
+
+function normalizeStoredSession(session) {
+  const metrics = normalizeStoredMetrics(session.metrics);
+  if (session.metrics?.averagePace != null && metrics.averagePaceSPer500M == null) {
+    metrics.averagePaceSPer500M = session.metrics.averagePace;
+  }
+  return { ...session, metrics };
+}
 
 export class SessionStore {
   constructor(indexedDB = globalThis.indexedDB) {
@@ -43,7 +68,9 @@ export class SessionStore {
   list() {
     return this.transaction(["sessions"], "readonly", (transaction) => {
       const request = transaction.objectStore("sessions").getAll();
-      return () => request.result.sort((first, second) => second.startedAt - first.startedAt);
+      return () => request.result
+        .map(normalizeStoredSession)
+        .sort((first, second) => second.startedAt - first.startedAt);
     });
   }
 
@@ -61,7 +88,10 @@ export class SessionStore {
   samples(id) {
     return this.transaction(["samples"], "readonly", (transaction) => {
       const request = transaction.objectStore("samples").index("sessionId").getAll(id);
-      return () => request.result;
+      return () => request.result.map((sample) => ({
+        ...sample,
+        metrics: normalizeStoredMetrics(sample.metrics),
+      }));
     });
   }
 }
@@ -77,10 +107,10 @@ export class SessionRecorder {
     this.current = null;
     this.pending = Promise.resolve();
     this.rowerState = null;
-    this.activeMilliseconds = 0;
-    this.lastRecordAt = null;
-    this.cadenceTotal = 0;
-    this.cadenceSamples = 0;
+    this.activeMs = 0;
+    this.lastRecordAtEpochMs = null;
+    this.cadenceTotalSpm = 0;
+    this.cadenceSampleCount = 0;
   }
 
   persist(sample) {
@@ -97,25 +127,24 @@ export class SessionRecorder {
       this.current = {
         id: this.makeId(), startedAt: timestamp, endedAt: null,
         status: "recording", synced: false, sampleCount: 0, metrics: {},
-        partial: values.sessionState === 3 || Number(values.elapsed) > 2,
+        partial: values.sessionState === 3 || Number(values.elapsedS) > 2,
         startUtcOffset: `${-new Date(timestamp).getTimezoneOffset() * 60}s`,
       };
       this.rowerState = values.sessionState;
-      this.activeMilliseconds = 0;
-      this.lastRecordAt = timestamp;
-      this.cadenceTotal = 0;
-      this.cadenceSamples = 0;
+      this.activeMs = 0;
+      this.lastRecordAtEpochMs = timestamp;
+      this.cadenceTotalSpm = 0;
+      this.cadenceSampleCount = 0;
     }
     if (!this.current) return;
-    if (this.lastRecordAt !== null && this.rowerState === 2) {
-      this.activeMilliseconds += timestamp - this.lastRecordAt;
+    if (this.lastRecordAtEpochMs !== null && this.rowerState === 2) {
+      this.activeMs += timestamp - this.lastRecordAtEpochMs;
     }
-    this.lastRecordAt = timestamp;
+    this.lastRecordAtEpochMs = timestamp;
     const sampleState = values.sessionState ?? this.rowerState;
     if (values.sessionState != null) this.rowerState = values.sessionState;
     const metrics = Object.fromEntries(Object.entries(values)
-      .filter(([key, value]) => !OMITTED_SAMPLE_METRICS.has(key) &&
-        (value === null || typeof value === "number" || typeof value === "string")));
+      .filter(([, value]) => value === null || typeof value === "number" || typeof value === "string"));
     const finishing = [1, 4, 10].includes(values.sessionState);
     for (const key of SUMMARY_COUNTERS) {
       const value = values[key];
@@ -126,16 +155,16 @@ export class SessionRecorder {
     if (Number.isFinite(values.averageWatts) && values.averageWatts > 0) {
       this.current.metrics.averageWatts = values.averageWatts;
     }
-    if (sampleState === 2 && Number.isFinite(values.cadence) && values.cadence > 0) {
-      this.cadenceTotal += values.cadence;
-      this.cadenceSamples += 1;
-      this.current.metrics.averageCadence = Math.round(this.cadenceTotal / this.cadenceSamples * 100) / 100;
+    if (sampleState === 2 && Number.isFinite(values.cadenceSpm) && values.cadenceSpm > 0) {
+      this.cadenceTotalSpm += values.cadenceSpm;
+      this.cadenceSampleCount += 1;
+      this.current.metrics.averageCadenceSpm = Math.round(this.cadenceTotalSpm / this.cadenceSampleCount * 100) / 100;
     }
-    const distance = this.current.metrics.distance;
-    const activeSeconds = this.activeMilliseconds / 1000;
-    if (!this.current.partial && distance > 0 && activeSeconds > 0) {
-      this.current.metrics.averageSpeed = Math.round(distance / activeSeconds * 360) / 100;
-      this.current.metrics.averagePace = Math.round(activeSeconds * 50000 / distance) / 100;
+    const distanceM = this.current.metrics.distanceM;
+    const activeS = this.activeMs / 1000;
+    if (!this.current.partial && distanceM > 0 && activeS > 0) {
+      this.current.metrics.averageSpeedKmh = Math.round(distanceM / activeS * 360) / 100;
+      this.current.metrics.averagePaceSPer500M = Math.round(activeS * 50000 / distanceM) / 100;
     }
     const sample = {
       sessionId: this.current.id, sequence: this.current.sampleCount++, timestamp, metrics,
@@ -153,10 +182,10 @@ export class SessionRecorder {
     this.persist();
     this.current = null;
     this.rowerState = null;
-    this.activeMilliseconds = 0;
-    this.lastRecordAt = null;
-    this.cadenceTotal = 0;
-    this.cadenceSamples = 0;
+    this.activeMs = 0;
+    this.lastRecordAtEpochMs = null;
+    this.cadenceTotalSpm = 0;
+    this.cadenceSampleCount = 0;
     return this.pending;
   }
 

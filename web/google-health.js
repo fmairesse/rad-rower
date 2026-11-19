@@ -11,17 +11,17 @@ export function exportWorkout(session, samples) {
   }
   const events = [];
   let previousState = 2;
-  let pauseStarted = null;
-  let pausedMilliseconds = 0;
+  let pauseStartedEpochMs = null;
+  let pausedMs = 0;
   const statistics = {};
   for (const sample of samples) {
     const state = sample.metrics.sessionState;
     if (state === 3 && previousState !== 3) {
-      pauseStarted = sample.timestamp;
+      pauseStartedEpochMs = sample.timestamp;
       events.push({ timestamp: sample.timestamp, type: "PAUSE", utcOffset: sample.utcOffset });
     } else if (state === 2 && previousState === 3) {
-      pausedMilliseconds += sample.timestamp - pauseStarted;
-      pauseStarted = null;
+      pausedMs += sample.timestamp - pauseStartedEpochMs;
+      pauseStartedEpochMs = null;
       events.push({ timestamp: sample.timestamp, type: "RESUME", utcOffset: sample.utcOffset });
     }
     if ([2, 3].includes(state)) previousState = state;
@@ -34,18 +34,18 @@ export function exportWorkout(session, samples) {
       entry.count++;
     }
   }
-  if (pauseStarted !== null) pausedMilliseconds += session.endedAt - pauseStarted;
-  const activeSeconds = Math.max(0, (session.endedAt - session.startedAt - pausedMilliseconds) / 1000);
+  if (pauseStartedEpochMs !== null) pausedMs += session.endedAt - pauseStartedEpochMs;
+  const activeS = Math.max(0, (session.endedAt - session.startedAt - pausedMs) / 1000);
   const summary = {};
-  const { distance, calories } = session.metrics;
-  if (Number.isFinite(distance) && distance >= 0) {
-    summary.distanceMillimeters = distance * 1000;
-    if (distance > 0 && activeSeconds > 0 && !session.partial) {
-      summary.averageSpeedMillimetersPerSecond = distance * 1000 / activeSeconds;
-      summary.averagePaceSecondsPerMeter = activeSeconds / distance;
+  const { distanceM, caloriesKcal } = session.metrics;
+  if (Number.isFinite(distanceM) && distanceM >= 0) {
+    summary.distanceMillimeters = distanceM * 1000;
+    if (distanceM > 0 && activeS > 0 && !session.partial) {
+      summary.averageSpeedMillimetersPerSecond = distanceM * 1000 / activeS;
+      summary.averagePaceSecondsPerMeter = activeS / distanceM;
     }
   }
-  if (Number.isFinite(calories) && calories >= 0) summary.caloriesKcal = calories;
+  if (Number.isFinite(caloriesKcal) && caloriesKcal >= 0) summary.caloriesKcal = caloriesKcal;
   const sampledStatistics = Object.fromEntries(Object.entries(statistics).map(([key, entry]) =>
     [key, { min: entry.min, max: entry.max, sampleMean: entry.sum / entry.count }]));
   return {
@@ -60,7 +60,7 @@ export function exportWorkout(session, samples) {
         startUtcOffset: session.startUtcOffset ?? offset(session.startedAt),
         endUtcOffset: session.endUtcOffset ?? offset(session.endedAt),
       },
-      activeDuration: duration(activeSeconds), metricsSummary: summary,
+      activeDuration: duration(activeS), metricsSummary: summary,
       exerciseEvents: [
         { eventTime: date(session.startedAt), eventUtcOffset: session.startUtcOffset ?? offset(session.startedAt), exerciseEventType: "START" },
         ...events.map((event) => ({ eventTime: date(event.timestamp),
@@ -69,9 +69,9 @@ export function exportWorkout(session, samples) {
       ],
       exerciseMetadata: { hasGps: false },
       notes: JSON.stringify({ app: "Radrower", sessionId: session.id, partial: session.partial,
-        units: { averageWatts: "W", averageCadence: "strokes/min", strokes: "strokes",
-          averageSpeed: "km/h", averagePace: "s/500m", distance: "m", elapsed: "s",
-          paused: "s", calories: "kcal" },
+        units: { averageWatts: "W", averageCadenceSpm: "strokes/min", strokesCount: "strokes",
+          averageSpeedKmh: "km/h", averagePaceSPer500M: "s/500m", averagePace: "s/500m",
+          distanceM: "m", elapsedS: "s", paused: "s", caloriesKcal: "kcal" },
         rowerMetrics: session.metrics, sampledStatistics,
         caveats: "Rower counters; partial recordings may omit earlier samples. Average cadence is a sample mean; average speed and pace use recorded active time and distance. Average power interpretation is provisional. Raw samples remain on the device." }),
     },

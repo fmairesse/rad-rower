@@ -1,6 +1,6 @@
 package io.radrower
 
-/** Rower session states; other codes reported by the rower are treated as unavailable. */
+/** Rower session states; code 10 is normalized to idle and all other unknown codes are unavailable. */
 internal enum class SessionState(val code: Int) {
     IDLE(1),
     IN_PROGRESS(2),
@@ -8,7 +8,8 @@ internal enum class SessionState(val code: Int) {
     FINISHED(4);
 
     companion object {
-        fun fromCode(code: Int?): SessionState? = entries.firstOrNull { it.code == code }
+        fun fromCode(code: Int?): SessionState? =
+            if (code == 10) IDLE else entries.firstOrNull { it.code == code }
     }
 }
 

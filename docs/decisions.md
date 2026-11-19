@@ -47,7 +47,10 @@ conversation. Si un choix change, indiquer quelle décision le remplace.
   IndexedDB stores, rather than serializing growing histories in localStorage.
 - Reason: asynchronous writes and indexed sample queries suit future charts.
 - Consequence: recordings survive reloads; interrupted recordings are kept but
-  not treated as completed. `synced` stays false until remote storage succeeds.
+  not treated as completed. Sample keys use the same unit-bearing names as the
+  Android protocol. Provisional `averageWatts`, `paused`, `caloriesPerHour`, and
+  `averagePace` values remain available in flexible sample metrics. `synced`
+  stays false until remote storage succeeds.
 - Limits: one active tab, origin-local storage, possible browser eviction and
   pending-write loss on abrupt closure. No device identifiers are retained.
 
@@ -97,16 +100,23 @@ conversation. Si un choix change, indiquer quelle décision le remplace.
 - Decision: store workout summaries and timestamped metric updates in separate
   SQLite tables using Room. Save each update and its summary transactionally.
 - Reason: preserve recordings independently of Health Connect availability or
-  permissions, and retain rowing metrics for later analysis and export.
-- Consequence: mark disconnected or recovered unfinished recordings as
-  interrupted; mark recordings first observed in progress without a preceding
-  idle state as partial. Calculate average speed and pace from rower-reported
-  active elapsed time and cumulative distance, not local wall-clock timing.
+  permissions, and retain rowing metrics for later analysis and export. Since
+  the sample table carries most rows, persisted metrics use typed columns with
+  unit-bearing names instead of a per-sample JSON object that repeats every key.
+- Consequence: Kotlin properties and Room columns use camel-case unit suffixes,
+  such as `powerW`, `distanceM`, and `elapsedS`; metric uncertainty is not hidden
+  in an untyped payload. The protocol continues to expose `averageWatts`, `paused`,
+  `caloriesPerHour`, and `averagePace`, but their insufficiently validated
+  interpretations are retained only in `unvalidatedMetricsJson`. Mark disconnected or recovered
+  unfinished recordings as interrupted; mark recordings first observed in
+  progress without a preceding idle state as partial. Calculate average speed
+  and pace from rower-reported active elapsed time and cumulative distance, not
+  local wall-clock timing.
 - Limits: pending writes may be lost on abrupt termination; Android app backup
   settings apply. The app does not store Bluetooth device identifiers.
-- Schema history: Room exports each schema version as JSON to
-  `android/app/schemas/` (2026-11-18); commit the new file with every version
-  bump so migrations can be written and tested against it.
+- Schema reset: before release, schema version 1 was replaced on 2026-11-19
+  with no data migration; existing debug databases must be cleared or the app
+  reinstalled. Room exports the replacement schema to `android/app/schemas/`.
 - Tests: `android/app/src/androidTest/java/io/radrower/WorkoutPersistenceTest.kt`.
 
 ## D008 - Export completed Android workouts to Health Connect
