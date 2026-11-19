@@ -63,6 +63,10 @@ class WorkoutHistoryScreenTest {
                 .getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
                 .format(Date(1_700_000_000_000))
         compose.onNodeWithText(date).assertExists()
+        compose.onNodeWithText(
+            "Before re-exporting an older workout, remove its old Radrower data in Health Connect " +
+                "to avoid duplicate distance records.",
+        ).assertIsDisplayed()
         compose.onNodeWithText("Duration: 1:02:03").assertIsDisplayed()
         compose.onNodeWithText("Distance: ${formatMetric("distance", 1234.0)} m").assertIsDisplayed()
         compose.onNodeWithText("Calories: 42 kcal").assertIsDisplayed()

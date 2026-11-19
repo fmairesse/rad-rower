@@ -56,19 +56,28 @@ configured app backup behavior also applies to the database.
 
 Completed, non-partial workouts can be exported from **Workout history** to
 Health Connect. Export is always initiated by the user. Radrower writes an
-indoor rowing exercise session, distance windows (up to 60 s) derived from the rower's
-cumulative distance readings while active, active calories, and measured
-power samples recorded while the workout was active. Distance counter resets
-and readings during pauses are not counted as distance. Power samples from
-pauses, missing values and invalid values are omitted. Other raw telemetry is
-not exported. Radrower does not read Health Connect data. Health Connect
+indoor rowing exercise session, one distance record using the stored cumulative
+distance, active calories, and separate timestamped power and speed records.
+The stored distance is the highest valid rower counter value, and may differ
+from the integral of the speed series.
+Speed is derived from the rower's reported pace and converted from km/h to m/s;
+it is not reconstructed from the distance counter. Only active-session power and
+speed samples are exported; pause, missing and invalid samples are omitted.
+Each series spans the whole session, so readers may interpolate across pauses.
+Other raw telemetry is not exported. Radrower does not read Health Connect data. Health Connect
 permissions are requested only when needed; export errors are shown in the
 history. Repeating an export uses stable client record IDs to avoid creating
 another copy of the same workout.
 
-Health Connect must be installed and available on the device. Export behavior
-and permissions still need to be verified against a real Health Connect
-provider; local workout recording remains independent of Health Connect.
+Before re-exporting a workout exported with an older version, remove its old
+Radrower data in Health Connect. The new distance record replaces the first
+old record, but additional distance windows from previous exports are not
+removed and would otherwise duplicate distance.
+
+Health Connect must be installed and available on the device. A synthetic
+export was written to Health Connect on an emulator, and the I1 synthetic
+layout was viewed in Intervals.icu. Export and downstream behavior still need
+validation with a real workout; local recording remains independent.
 
 To force a new export of existing workouts (for example to make Health Sync
 import them again), give them new IDs on a phone connected with `adb`. The
@@ -87,3 +96,6 @@ Build and run unit tests from the repository root:
 ```sh
 android/gradlew -p android :app:assembleDebug :app:testDebugUnitTest
 ```
+
+The local unit tests include the conversion of a saved workout and its
+samples into Health Connect records. They do not write to Health Connect.

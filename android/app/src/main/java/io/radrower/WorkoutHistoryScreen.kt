@@ -79,6 +79,11 @@ internal fun WorkoutHistoryScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = onBack) { Text("Back to dashboard") }
                     Text("Workout history", style = MaterialTheme.typography.headlineMedium)
+                    Text(
+                        "Before re-exporting an older workout, remove its old Radrower data in Health Connect " +
+                            "to avoid duplicate distance records.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
                     storageError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                     exportMessage?.let {
                         Text(

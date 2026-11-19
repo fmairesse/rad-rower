@@ -1,16 +1,22 @@
 package io.radrower
 
+import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.PowerRecord
+import androidx.health.connect.client.records.SpeedRecord
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.runner.RunWith
 import org.junit.Test
 import java.time.Instant
+import java.util.UUID
 
 @RunWith(AndroidJUnit4::class)
 class HealthConnectExportTest {
@@ -40,6 +46,7 @@ class HealthConnectExportTest {
         sessionState: Int? = null,
         watts: Number? = null,
         distance: Number? = null,
+        speed: Number? = null,
     ): WorkoutSample {
         val entries = buildList {
             sessionState?.let { add("\"sessionState\":$it") }
@@ -50,6 +57,10 @@ class HealthConnectExportTest {
             distance?.let {
                 val value = it.toDouble()
                 add("\"distance\":${if (value.isFinite()) value else "\"NaN\""}")
+            }
+            speed?.let {
+                val value = it.toDouble()
+                add("\"speed\":${if (value.isFinite()) value else "\"NaN\""}")
             }
         }
         return WorkoutSample(
@@ -66,7 +77,7 @@ class HealthConnectExportTest {
         val workout = workout()
         val records = HealthConnectExport.records(workout)
 
-        assertEquals(2, records.size)
+        assertEquals(3, records.size)
         val session = records[0] as ExerciseSessionRecord
         assertEquals(ExerciseSessionRecord.EXERCISE_TYPE_ROWING_MACHINE, session.exerciseType)
         assertEquals(Instant.ofEpochMilli(workout.startedAt), session.startTime)
@@ -75,19 +86,44 @@ class HealthConnectExportTest {
         assertEquals("radrower:workout-id:exercise", session.metadata.clientRecordId)
         assertEquals(
             "radrower:workout-id:active-calories",
-            (records[1] as ActiveCaloriesBurnedRecord).metadata.clientRecordId,
+            records.filterIsInstance<ActiveCaloriesBurnedRecord>().single().metadata.clientRecordId,
         )
         assertEquals(
             setOf(
                 "android.permission.health.WRITE_EXERCISE",
                 "android.permission.health.WRITE_ACTIVE_CALORIES_BURNED",
+                "android.permission.health.WRITE_DISTANCE",
             ),
             HealthConnectExport.permissionsFor(workout),
         )
     }
 
     @Test
-    fun exportsDistanceAsNonOverlappingActiveIntervalDeltas() {
+    fun exportsAllAvailableMetricsTogether() {
+        val workout = workout()
+        val samples = listOf(sample(0, workout.startedAt, sessionState = 2, watts = 100, speed = 18))
+        val records = HealthConnectExport.records(workout, samples)
+
+        assertEquals(5, records.size)
+        assertEquals(1, records.filterIsInstance<ExerciseSessionRecord>().size)
+        assertEquals(1, records.filterIsInstance<DistanceRecord>().size)
+        assertEquals(1, records.filterIsInstance<ActiveCaloriesBurnedRecord>().size)
+        assertEquals(1, records.filterIsInstance<PowerRecord>().size)
+        assertEquals(1, records.filterIsInstance<SpeedRecord>().size)
+        assertEquals(
+            setOf(
+                "android.permission.health.WRITE_EXERCISE",
+                "android.permission.health.WRITE_DISTANCE",
+                "android.permission.health.WRITE_ACTIVE_CALORIES_BURNED",
+                "android.permission.health.WRITE_POWER",
+                "android.permission.health.WRITE_SPEED",
+            ),
+            HealthConnectExport.permissionsFor(workout, samples),
+        )
+    }
+
+    @Test
+    fun exportsOneSessionDistanceUsingStoredTotal() {
         val workout = workout(distance = 150.0)
         val samples = listOf(
             sample(0, workout.startedAt, sessionState = 2, distance = 0),
@@ -102,80 +138,44 @@ class HealthConnectExportTest {
         val records = HealthConnectExport.records(workout, samples)
         val distances = records.filterIsInstance<DistanceRecord>()
 
-        assertEquals(2, distances.size)
-        assertEquals(
-            listOf(
-                workout.startedAt to workout.startedAt + 1_000,
-                workout.startedAt + 4_000 to workout.startedAt + 5_000,
-            ),
-            distances.map { it.startTime.toEpochMilli() to it.endTime.toEpochMilli() },
-        )
-        assertEquals(listOf(100.0, 50.0), distances.map { it.distance.inMeters })
-        assertEquals(
-            listOf("radrower:workout-id:distance", "radrower:workout-id:distance:1"),
-            distances.map { it.metadata.clientRecordId },
-        )
-        assertEquals(listOf(3L, 3L), distances.map { it.metadata.clientRecordVersion })
-        assertEquals(150.0, distances.sumOf { it.distance.inMeters }, 0.0)
+        val distance = distances.single()
+        assertEquals(workout.startedAt, distance.startTime.toEpochMilli())
+        assertEquals(workout.endedAt, distance.endTime.toEpochMilli())
+        assertEquals(150.0, distance.distance.inMeters, 0.0)
+        assertEquals("radrower:workout-id:distance", distance.metadata.clientRecordId)
+        assertEquals(6L, distance.metadata.clientRecordVersion)
+        assertEquals(3_600, distance.startZoneOffset!!.totalSeconds)
+        assertEquals(3_600, distance.endZoneOffset!!.totalSeconds)
         assertTrue("android.permission.health.WRITE_DISTANCE" in HealthConnectExport.permissionsFor(workout, samples))
     }
 
     @Test
-    fun groupsDistanceIntoOneMinuteWindowsWithinActiveSegments() {
-        val workout = workout(distance = 200.0)
-        // One sample per second, 2 m per second, for 100 s, then a pause and 10 more seconds.
-        val samples = (0..100).map { second ->
-            sample(
-                second,
-                workout.startedAt + second * 1_000L,
-                sessionState = if (second == 0) 2 else null,
-                distance = second * 2,
-            )
-        } + listOf(
-            sample(101, workout.startedAt + 101_000, sessionState = 3, distance = 0),
-            sample(102, workout.startedAt + 102_000, sessionState = 2, distance = 200),
-            sample(103, workout.startedAt + 112_000, distance = 220),
-        )
-
-        val distances = HealthConnectExport.records(workout, samples).filterIsInstance<DistanceRecord>()
-
-        assertEquals(
-            listOf(
-                workout.startedAt to workout.startedAt + 60_000,
-                workout.startedAt + 60_000 to workout.startedAt + 100_000,
-                workout.startedAt + 102_000 to workout.startedAt + 112_000,
-            ),
-            distances.map { it.startTime.toEpochMilli() to it.endTime.toEpochMilli() },
-        )
-        assertEquals(listOf(120.0, 80.0, 20.0), distances.map { it.distance.inMeters })
-    }
-
-    @Test
-    fun doesNotInferDistanceFromSummaryWithoutActiveSamples() {
+    fun exportsStoredDistanceWithoutActiveSamples() {
         val workout = workout(distance = 500.0)
         val samples = listOf(
             sample(0, workout.startedAt, sessionState = 3, distance = 500),
             sample(1, workout.startedAt + 1_000, distance = 550),
         )
 
-        assertTrue(HealthConnectExport.records(workout, samples).none { it is DistanceRecord })
-        assertFalse("android.permission.health.WRITE_DISTANCE" in HealthConnectExport.permissionsFor(workout, samples))
+        assertEquals(500.0, HealthConnectExport.records(workout, samples).filterIsInstance<DistanceRecord>().single().distance.inMeters, 0.0)
+        assertTrue("android.permission.health.WRITE_DISTANCE" in HealthConnectExport.permissionsFor(workout, samples))
     }
 
     @Test
     fun omitsUnavailableOrNonpositiveTotalsAndTheirPermissions() {
-        val workout = workout(distance = null, calories = 0.0)
-
-        assertEquals(1, HealthConnectExport.records(workout).size)
-        assertEquals(
-            setOf("android.permission.health.WRITE_EXERCISE"),
-            HealthConnectExport.permissionsFor(workout),
-        )
+        listOf(null, 0.0, -1.0, Double.NaN, Double.POSITIVE_INFINITY).forEach { distance ->
+            val workout = workout(distance = distance, calories = 0.0)
+            assertEquals(1, HealthConnectExport.records(workout).size)
+            assertEquals(
+                setOf("android.permission.health.WRITE_EXERCISE"),
+                HealthConnectExport.permissionsFor(workout),
+            )
+        }
     }
 
     @Test
     fun exportsMeasuredPowerSamplesOnlyWhileSessionIsActive() {
-        val workout = workout()
+        val workout = workout(distance = null)
         val samples = listOf(
             sample(0, workout.startedAt, sessionState = 2, watts = 0),
             sample(1, workout.startedAt + 1_000, watts = 120),
@@ -210,6 +210,71 @@ class HealthConnectExportTest {
 
         assertTrue(HealthConnectExport.records(workout, samples).none { it is PowerRecord })
         assertFalse("android.permission.health.WRITE_POWER" in HealthConnectExport.permissionsFor(workout, samples))
+    }
+
+    @Test
+    fun exportsActiveSpeedSamplesInMetersPerSecond() {
+        val workout = workout(distance = null, calories = 0.0)
+        val samples = listOf(
+            sample(0, workout.startedAt - 1_000, sessionState = 2, speed = 36),
+            sample(1, workout.startedAt, sessionState = 2, speed = 0),
+            sample(2, workout.startedAt + 1_000, speed = 18),
+            sample(3, workout.startedAt + 2_000, sessionState = 3, speed = 30),
+            sample(4, workout.startedAt + 3_000, speed = 30),
+            sample(5, workout.startedAt + 4_000, sessionState = 2, speed = 36),
+            sample(6, workout.startedAt + 4_000, speed = 18),
+            sample(7, workout.startedAt + 5_000, speed = Double.NaN),
+            sample(8, workout.startedAt + 6_000, speed = -1),
+            sample(9, workout.endedAt!!, sessionState = 4, speed = 36),
+            sample(10, workout.endedAt + 1_000, sessionState = 2, speed = 36),
+        )
+        val speed = HealthConnectExport.records(workout, samples).filterIsInstance<SpeedRecord>().single()
+        assertEquals(listOf(workout.startedAt, workout.startedAt + 1_000, workout.startedAt + 4_000),
+            speed.samples.map { it.time.toEpochMilli() })
+        assertEquals(listOf(0.0, 5.0, 5.0), speed.samples.map { it.speed.inMetersPerSecond })
+        assertEquals("radrower:workout-id:speed", speed.metadata.clientRecordId)
+        assertEquals(Instant.ofEpochMilli(workout.startedAt), speed.startTime)
+        assertEquals(Instant.ofEpochMilli(workout.endedAt), speed.endTime)
+        assertEquals(setOf("android.permission.health.WRITE_EXERCISE", "android.permission.health.WRITE_SPEED"),
+            HealthConnectExport.permissionsFor(workout, samples))
+    }
+
+    @Test
+    fun omitsSpeedAndPermissionWithoutActiveMeasurements() {
+        val workout = workout(distance = null, calories = 0.0)
+        val samples = listOf(
+            sample(0, workout.startedAt, sessionState = 3, speed = 18),
+            sample(1, workout.startedAt + 1_000, speed = 18),
+            sample(2, workout.startedAt + 2_000, sessionState = 2, speed = -1),
+        )
+        assertTrue(HealthConnectExport.records(workout, samples).none { it is SpeedRecord })
+        assertFalse("android.permission.health.WRITE_SPEED" in HealthConnectExport.permissionsFor(workout, samples))
+    }
+
+    @Test
+    fun writesProductionExportToHealthConnectWhenRequested() {
+        assumeTrue(
+            InstrumentationRegistry.getArguments().getString("runExportIntegration") == "true",
+        )
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        check(HealthConnectClient.getSdkStatus(context) == HealthConnectClient.SDK_AVAILABLE)
+        val client = HealthConnectClient.getOrCreate(context)
+        val workout = workout(distance = 100.0, calories = 0.0).copy(id = "test-${UUID.randomUUID()}")
+        val samples = listOf(sample(0, workout.startedAt, sessionState = 2, watts = 100, speed = 18))
+        val prefix = "radrower:${workout.id}"
+        runBlocking {
+            check(client.permissionController.getGrantedPermissions().containsAll(
+                HealthConnectExport.permissionsFor(workout, samples),
+            ))
+            try {
+                HealthConnectExport.export(client, workout, samples)
+            } finally {
+                client.deleteRecords(ExerciseSessionRecord::class, emptyList(), listOf("$prefix:exercise"))
+                client.deleteRecords(DistanceRecord::class, emptyList(), listOf("$prefix:distance"))
+                client.deleteRecords(PowerRecord::class, emptyList(), listOf("$prefix:power"))
+                client.deleteRecords(SpeedRecord::class, emptyList(), listOf("$prefix:speed"))
+            }
+        }
     }
 
     @Test

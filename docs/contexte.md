@@ -1,6 +1,6 @@
 # Contexte du projet
 
-Dernière mise à jour : 2026-11-17.
+Dernière mise à jour : 2026-11-19.
 
 ## Objectif
 
@@ -35,13 +35,30 @@ remain distinct. Linux experimentation tools continue to report raw values.
 The persistence and UI tests pass with simulated data on an Android 16
 emulator; the recording has not yet been tested on the real rower. Completed,
 non-partial workouts can now be exported on request to Health Connect as an
-indoor rowing session with distance windows (10 s, interpolated) derived from cumulative readings
-while active, active-calorie totals and timestamped power measurements
-recorded while active. Distance resets and pause samples are excluded.
-Permissions are requested only as needed and local recording remains
-independent. Health Connect availability, permission UX and writes still need
-validation with a real provider. See `android/README.md` for operation and
-limitations.
+indoor rowing session with one saved cumulative distance, active-calorie totals
+and timestamped power and speed measurements while active. Speed is derived
+from reported pace; pause samples are excluded from both series.
+Permissions are requested only as needed, including production write-speed
+permission when valid speed samples exist, and local recording remains
+independent. A synthetic production export was inserted and removed on an
+emulator with Health Connect; real-workout and permission UX validation are
+still needed. See `android/README.md` for operation and limitations.
+
+The user no longer wants to tailor Health Connect exports to Strava and reports
+that the earlier D2 speed-series experiment worked with Intervals.icu. On
+2026-11-19, synthetic I1 was inserted on the connected phone: a 10-minute
+rowing session with one power series, one speed series and one total distance.
+The experiment and its structure test are in
+`android/app/src/androidTest/java/io/radrower/HealthSyncExperiment.kt` and
+`HealthSyncExperimentTest.kt`. The user's
+Intervals.icu screenshot shows increasing pace and power curves, 2.09 km and
+9:58 for the 2,098.5 m, 10:00 test; the small summary differences remain
+unexplained. Next, investigate those differences and validate the proposed
+layout on real workouts. The production export now follows that layout; its
+real-workout behavior and the relationship between distance and speed remain
+unverified. Readers may interpolate the continuous series across pauses.
+Before re-exporting an old workout, remove its old Radrower data in Health
+Connect to avoid retaining duplicate distance windows.
 
 `bleak/02-connection.py` maintient la connexion avec le rameur (validé par
 l’utilisateur le 2026-11-14) : initialisation de 25 écritures puis poll

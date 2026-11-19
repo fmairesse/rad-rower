@@ -112,46 +112,46 @@ conversation. Si un choix change, indiquer quelle décision le remplace.
 ## D008 - Export completed Android workouts to Health Connect
 
 - Date: 2026-11-16.
-- Status: implemented, including measured power and distance intervals on
-  2026-11-17; a real Health Connect provider has not yet been tested.
+- Status: implemented; the simple series layout was tested synthetically with
+  Health Connect, Health Sync and Intervals.icu on 2026-11-19.
 - Decision: offer a user-triggered export from workout history for completed,
   non-partial workouts only. Write an indoor rowing `ExerciseSessionRecord`
-  and, when available, active calories, distance intervals derived from the
-  rower's cumulative readings, plus the timestamped measured power series
-  while actively rowing.
+  and, when available, active calories, one whole-session distance record
+  from the saved rower counter, and timestamped power and speed series.
 - Reason: make the already-persisted local summary available to fitness apps
   without making Health Connect a prerequisite for recording.
 - Privacy and retries: request only the write permissions needed for a
   workout's available metrics; never read Health Connect records. Use stable
   client record IDs and versions so retrying the same immutable workout does
-  not create a second copy. Derive distance deltas only
-  between monotonic readings in active session state, and split records around
-  pauses; disregard counter decreases and pause values. Preserve the previous
-  distance as the summary total. Each active
-  stretch is cut into fixed 10 s windows (2026-11-18), with the distance at each
-  boundary interpolated from the rower's cumulative readings, which update only
-  every ~1.7 s in irregular steps. Merging raw deltas into 60 s windows made
-  Strava's speed fall to 0 for the last minute; merging them into ~3.5 s windows
-  made it noisy (13-25 km/h) because a window held one or two counter steps.
-  Interpolated 10 s windows reduced the simulated noise on one workout from
-  ±6 to ±1.8 km/h and keep the real speed-up from ~19 to ~21 km/h visible
-  (how Strava places a record's distance in time is a hypothesis). The first
-  window reuses the earlier whole-session distance record ID; all distance
-  records use version 5 so a re-export overwrites previous layouts (extra
-  per-sample or per-window records from an earlier export, if any, would not
-  be removed). Export power measurements from
-  locally stored samples only when their session state is active; pause,
-  missing, invalid and out-of-session samples are excluded. Other raw samples
-  remain local.
+  not create a second copy. Speed samples are recorded in km/h, calculated
+  from rower-reported pace, and converted to m/s for Health Connect; they are
+  not inferred from the distance counter. Export power and speed samples only
+  in active session state, excluding pause, missing, invalid and out-of-session
+  readings. Their timings are preserved; other raw samples remain local.
+  Distance uses the recorded summary counter, independently of speed; the
+  recorder retains its highest valid value, including across pauses and
+  decreases. The total and integrated speed need not agree. Series span the
+  whole session, so downstream readers may interpolate across pauses.
+- Layout change (2026-11-19): the user chose one total distance record and
+  separate speed and power series, without Strava-specific adjustments.
+  I1's synthetic data produced rising power and pace curves in Intervals.icu;
+  its 10:00, 2,098.5 m session appeared as 9:58 and 2.09 km for an unknown
+  reason. Real workouts and pauses still require validation. The distance
+  record reuses the original client ID at version 6, higher than the version 5
+  experimental layout. Extra distance records from earlier exports are not
+  removed. The user chose to delete older Radrower Health Connect data before
+  re-exporting; the history screen and README warn about duplicate distance.
 - Write limits: Health Connect guidance recommends at most 1000 records per
   write request, so `insertRecords` is called in chunks of 1000. The SDK
   (androidx.health.connect:connect-client 1.1.0) caps each power sample at
   0-100000 W but sets no limit on samples per `PowerRecord`; whether the
-  Health Connect service enforces one is unverified, so the power series is
-  exported without downsampling until a real-provider test shows otherwise.
+  Health Connect service enforces a series sample limit is unverified, so
+  power and speed series are exported without downsampling until tested.
 - Limits: availability, consent UI, permissions and remote write behavior
-  require a real-provider test. Partial and interrupted workouts are not
-  exported; zero or unavailable metric totals are omitted.
+  require a real-workout test. Partial and interrupted workouts are not
+  exported; zero or unavailable metric totals are omitted. Production export
+  insertion and cleanup passed with synthetic data on an emulator; downstream
+  behavior with a real workout remains unverified.
 - Compatibility: raise the app minimum API from 24 to 26 because the official
   Health Connect client declares API 26 as its minimum. Health Connect itself
   may still be unavailable on some devices running API 26 or 27.
@@ -159,6 +159,7 @@ conversation. Si un choix change, indiquer quelle décision le remplace.
   [exercise sessions](https://developer.android.com/reference/kotlin/androidx/health/connect/client/records/ExerciseSessionRecord),
   [distance records](https://developer.android.com/reference/kotlin/androidx/health/connect/client/records/DistanceRecord),
   [power records](https://developer.android.com/reference/kotlin/androidx/health/connect/client/records/PowerRecord),
+  [speed records](https://developer.android.com/reference/kotlin/androidx/health/connect/client/records/SpeedRecord),
   [AndroidX release notes](https://developer.android.com/jetpack/androidx/releases/health-connect).
 
 ## D009 - Assume resistance level 1 when unset
