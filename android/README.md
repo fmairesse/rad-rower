@@ -70,6 +70,15 @@ indoor rowing exercise session, one distance record using the stored cumulative
 distance, active calories, and separate timestamped power and speed records.
 The session includes the stored rowing and pause segments; zero-duration
 segments are omitted because Health Connect requires a positive duration.
+It also includes 500 m laps and, when needed, a shorter final lap. Lap
+boundaries are estimated by linear interpolation of saved cumulative distance
+readings, assuming distance starts at zero and progresses uniformly between
+readings during non-pause time. Known pause segments are excluded from that
+interpolation but remain part of the lap's elapsed duration. The estimates
+may be inaccurate when readings are sparse or pauses are missing.
+Counter decreases are ignored, as in the stored summary. If a 500 m boundary
+cannot be placed with the available samples, the workout is exported without
+laps and the export message says so.
 The stored distance is the highest valid rower counter value, and may differ
 from the integral of the speed series.
 Speed is derived from the rower's reported pace and converted from km/h to m/s;

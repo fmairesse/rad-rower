@@ -164,6 +164,14 @@ conversation. Si un choix change, indiquer quelle décision le remplace.
   intervals because Health Connect requires positive duration; increment the
   exercise record version so re-export updates it. Exact transition timing and
   downstream pause handling remain unverified on a real workout.
+- Laps (2026-11-19): export 500 m laps and a final remainder using the saved
+  cumulative rower distance, not speed integration. Estimate threshold times
+  linearly between readings, excluding known pause intervals. Start at zero,
+  ignore counter decreases, and retain pauses within lap elapsed time. If
+  thresholds cannot be located, export without laps and notify the user.
+  Exercise record version 3 replaces the previous session on re-export.
+  Sparse readings, unrecorded pauses and downstream interpretation remain
+  limitations; the production layout requires real-workout validation.
 - Limits: availability, consent UI, permissions and remote write behavior
   require a real-workout test. Partial and interrupted workouts are not
   exported; zero or unavailable metric totals are omitted. Production export

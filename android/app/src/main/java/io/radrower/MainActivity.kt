@@ -244,8 +244,13 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             try {
                 val healthConnectClient = client ?: HealthConnectClient.getOrCreate(applicationContext)
-                HealthConnectExport.export(healthConnectClient, workout, samples, segments)
-                finishHealthConnectExport("Workout exported to Health Connect.", false)
+                val result = HealthConnectExport.export(healthConnectClient, workout, samples, segments)
+                val message = if (result.lapsUnavailable) {
+                    "Workout exported to Health Connect, but laps could not be calculated from the saved distance samples."
+                } else {
+                    "Workout exported to Health Connect."
+                }
+                finishHealthConnectExport(message, false)
             } catch (error: Exception) {
                 if (error is CancellationException) throw error
                 finishHealthConnectExport("Unable to export workout: ${error.message ?: "request failed"}", true)

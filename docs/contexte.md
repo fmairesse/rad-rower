@@ -61,6 +61,14 @@ the persistence and export tests pass with simulated data on an Android 16
 emulator, and the local export conversion tests pass. See
 `WorkoutPersistenceTest.kt` and `HealthConnectExportTest.kt`.
 
+The production Health Connect export now includes 500 m laps and a shorter
+final lap when needed. Boundaries are interpolated from saved cumulative
+distance, excluding known pauses from the interpolated active time; this is an
+estimate, not a rower measurement. When samples cannot locate every boundary,
+the export omits laps and reports that to the user. Local conversion tests cover
+pauses, resets and missing data; real Health Connect and downstream behavior
+for this production layout still need validation.
+
 The user no longer wants to tailor Health Connect exports to Strava and reports
 that the earlier D2 speed-series experiment worked with Intervals.icu. On
 2026-11-19, synthetic I1 was inserted on the connected phone: a 10-minute
