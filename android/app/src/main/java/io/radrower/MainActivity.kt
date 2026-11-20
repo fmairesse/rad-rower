@@ -2,6 +2,7 @@ package io.radrower
 
 import android.bluetooth.BluetoothAdapter
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.os.Bundle
 import android.os.SystemClock
 import android.provider.Settings
@@ -44,6 +45,8 @@ import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
+import androidx.health.connect.client.permission.HealthPermission
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import io.radrower.ui.theme.RadRowerTheme
 import kotlinx.coroutines.CancellationException
@@ -58,6 +61,9 @@ class MainActivity : ComponentActivity() {
     private lateinit var rower: RowerConnection
     private var foreground = false
     private var permissionRequested = false
+    private var bluetoothPermissionPending = false
+    private var startupHealthChecked = false
+    private var checkingStartupHealth = false
     private var permissionGranted by mutableStateOf(false)
     private var bluetoothEnabled by mutableStateOf(false)
 
@@ -72,10 +78,19 @@ class MainActivity : ComponentActivity() {
     private var healthExportMessage by mutableStateOf<String?>(null)
     private var healthExportMessageIsError by mutableStateOf(false)
 
+    private val startupHealthPermissions: Set<String>
+        get() = if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+            HealthConnectExport.allWritePermissions + HealthPermission.PERMISSION_WRITE_EXERCISE_ROUTE
+        } else {
+            HealthConnectExport.allWritePermissions
+        }
+
     private val permissions =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+            bluetoothPermissionPending = false
             refreshAvailability()
             if (foreground && permissionGranted && bluetoothEnabled) rower.connect()
+            requestStartupHealthPermissions()
         }
     private val healthConnectPermissions =
         registerForActivityResult(
@@ -91,6 +106,9 @@ class MainActivity : ComponentActivity() {
                     healthExportMessage = "Health Connect permission was not granted."
                     healthExportMessageIsError = true
                 }
+            } else if (!grantedPermissions.containsAll(startupHealthPermissions)) {
+                healthExportMessage = "Some Health Connect permissions were not granted. Missing workout permissions can be requested when exporting."
+                healthExportMessageIsError = true
             }
         }
     private val enableBluetooth =
@@ -102,6 +120,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         permissionRequested = savedInstanceState?.getBoolean("permissionRequested") ?: false
+        bluetoothPermissionPending = savedInstanceState?.getBoolean("bluetoothPermissionPending") ?: false
+        startupHealthChecked = savedInstanceState?.getBoolean("startupHealthChecked") ?: false
         val app = application as RadrowerApplication
         val recorder = app.recorder
         rower = RowerConnection(applicationContext, lifecycleScope, recorder::record, recorder::disconnect)
@@ -161,6 +181,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         refreshAvailability()
         if (permissionGranted && bluetoothEnabled) rower.connect()
+        requestStartupHealthPermissions()
     }
 
     override fun onStop() {
@@ -171,6 +192,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putBoolean("permissionRequested", permissionRequested)
+        outState.putBoolean("bluetoothPermissionPending", bluetoothPermissionPending)
+        outState.putBoolean("startupHealthChecked", startupHealthChecked)
         super.onSaveInstanceState(outState)
     }
 
@@ -189,11 +212,42 @@ class MainActivity : ComponentActivity() {
             )
         } else {
             permissionRequested = true
+            bluetoothPermissionPending = true
             permissions.launch(bluetoothPermissions())
         }
     }
 
+    private fun requestStartupHealthPermissions() {
+        if (startupHealthChecked || checkingStartupHealth || bluetoothPermissionPending ||
+            !lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+        ) return
+        if (HealthConnectClient.getSdkStatus(this) != HealthConnectClient.SDK_AVAILABLE) {
+            startupHealthChecked = true
+            return
+        }
+        checkingStartupHealth = true
+        lifecycleScope.launch {
+            try {
+                val client = HealthConnectClient.getOrCreate(applicationContext)
+                val granted = client.permissionController.getGrantedPermissions()
+                if (startupHealthChecked || !lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return@launch
+                startupHealthChecked = true
+                if (!granted.containsAll(startupHealthPermissions)) {
+                    healthConnectPermissions.launch(startupHealthPermissions)
+                }
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                startupHealthChecked = true
+                healthExportMessage = "Unable to access Health Connect: ${error.message ?: "request failed"}"
+                healthExportMessageIsError = true
+            } finally {
+                checkingStartupHealth = false
+            }
+        }
+    }
+
     private fun beginHealthConnectExport(workout: Workout) {
+        startupHealthChecked = true
         if (!HealthConnectExport.isEligible(workout)) {
             healthExportMessage = "Only completed, non-partial workouts can be exported."
             healthExportMessageIsError = true

@@ -45,9 +45,11 @@ non-partial workouts can now be exported on request to Health Connect as an
 indoor rowing session with one saved cumulative distance, active-calorie totals
 and timestamped power and speed measurements while active. Speed is derived
 from reported pace; pause samples are excluded from both series.
-Permissions are requested only as needed, including production write-speed
-permission when valid speed samples exist, and local recording remains
-independent. A synthetic production export was inserted and removed on an
+At launch, the app requests Bluetooth permissions and, when Health Connect is
+available, all five Health Connect write permissions. Missing permissions can
+still be requested at export, and local recording remains independent. The
+startup permission flow has not yet been validated on a device.
+A synthetic production export was inserted and removed on an
 emulator with Health Connect; real-workout and permission UX validation are
 still needed. See `android/README.md` for operation and limitations.
 

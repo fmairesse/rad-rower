@@ -147,6 +147,7 @@ class HealthConnectExportTest {
             ),
             HealthConnectExport.permissionsFor(workout, samples),
         )
+        assertEquals(HealthConnectExport.permissionsFor(workout, samples), HealthConnectExport.allWritePermissions)
     }
 
     @Test

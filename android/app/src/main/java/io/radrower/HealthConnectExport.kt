@@ -23,6 +23,14 @@ import kotlin.math.roundToLong
 internal object HealthConnectExport {
     data class ExportResult(val lapsUnavailable: Boolean)
 
+    val allWritePermissions: Set<String> = setOf(
+        HealthPermission.getWritePermission(ExerciseSessionRecord::class),
+        HealthPermission.getWritePermission(DistanceRecord::class),
+        HealthPermission.getWritePermission(ActiveCaloriesBurnedRecord::class),
+        HealthPermission.getWritePermission(PowerRecord::class),
+        HealthPermission.getWritePermission(SpeedRecord::class),
+    )
+
     // Health Connect guidance: at most 1000 records per write request.
     private const val MAX_RECORDS_PER_INSERT = 1_000
 

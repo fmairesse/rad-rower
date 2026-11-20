@@ -11,6 +11,11 @@ connection** if the rower was not found or the connection was lost.
 On Android 12 and newer, grant the nearby-devices permissions. On Android 11
 and earlier, Bluetooth scanning requires location permission and may require
 location services to be enabled. Bluetooth itself must also be enabled.
+At launch, the app requests the applicable Bluetooth permissions, followed by
+all five Health Connect write permissions when Health Connect is available.
+If Health Connect is unavailable, install or update it before exporting. A
+denied Health Connect permission can be requested again when exporting;
+local recording does not depend on it.
 
 Keep the app in the foreground: the screen stays awake while the connected
 rower reports an active session. It can turn off normally when the session is
@@ -85,8 +90,9 @@ Speed is derived from the rower's reported pace and converted from km/h to m/s;
 it is not reconstructed from the distance counter. Only active-session power and
 speed samples are exported; pause, missing and invalid samples are omitted.
 Each series spans the whole session, so readers may interpolate across pauses.
-Other raw telemetry is not exported. Radrower does not read Health Connect data. Health Connect
-permissions are requested only when needed; export errors are shown in the
+Other raw telemetry is not exported. Radrower does not read Health Connect data.
+If a needed permission was not granted at launch, it is requested at export;
+export errors are shown in the
 history. Repeating an export uses stable client record IDs to avoid creating
 another copy of the same workout.
 

@@ -131,8 +131,9 @@ conversation. Si un choix change, indiquer quelle décision le remplace.
   from the saved rower counter, and timestamped power and speed series.
 - Reason: make the already-persisted local summary available to fitness apps
   without making Health Connect a prerequisite for recording.
-- Privacy and retries: request only the write permissions needed for a
-  workout's available metrics; never read Health Connect records. Use stable
+- Privacy and retries: since 2026-11-20, request all five Health Connect write
+  permissions at app launch when available; request missing permissions needed
+  for a workout again at export. Never read Health Connect records. Use stable
   client record IDs and versions so retrying the same immutable workout does
   not create a second copy. Speed samples are recorded in km/h, calculated
   from rower-reported pace, and converted to m/s for Health Connect; they are

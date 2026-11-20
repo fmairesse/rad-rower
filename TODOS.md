@@ -1,0 +1,8 @@
+- Pourquoi json pour les samples @done
+- découper en segments et gérer les pauses
+- ne pas garder workout de moins d’1 minute + toast au stop
+- synchro auto vers Connect après arrêt d’un workout de plus de 1 minute
+- export .fit
+- bufferiser les écritures en base?
+- WorkManager ?
+- export intervals.icu depuis web
