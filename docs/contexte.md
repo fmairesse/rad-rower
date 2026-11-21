@@ -1,6 +1,6 @@
 # Contexte du projet
 
-Dernière mise à jour : 2026-11-19.
+Dernière mise à jour : 2026-11-21.
 
 ## Objectif
 
@@ -73,19 +73,22 @@ for this production layout still need validation.
 
 The user no longer wants to tailor Health Connect exports to Strava and reports
 that the earlier D2 speed-series experiment worked with Intervals.icu. On
-2026-11-19, synthetic I1 was inserted on the connected phone: a 10-minute
-rowing session with one power series, one speed series and one total distance.
-The experiment and its structure test are in
-`android/app/src/androidTest/java/io/radrower/HealthSyncExperiment.kt` and
-`HealthSyncExperimentTest.kt`. The user's
+2026-11-19, synthetic I1 was inserted on the connected phone as a 10-minute
+rowing session with power and speed series and a total distance. The user's
 Intervals.icu screenshot shows increasing pace and power curves, 2.09 km and
 9:58 for the 2,098.5 m, 10:00 test; the small summary differences remain
-unexplained. Next, investigate those differences and validate the proposed
-layout on real workouts. The production export now follows that layout; its
-real-workout behavior and the relationship between distance and speed remain
-unverified. Readers may interpolate the continuous series across pauses.
-Before re-exporting an old workout, remove its old Radrower data in Health
-Connect to avoid retaining duplicate distance windows.
+unexplained. On 2026-11-21, the opt-in instrumentation test was simplified to
+insert a synthetic rowing session with pause segments, power samples and
+individual distance records; it no longer checks record structure and does not
+include speed samples, laps or a route. The test is in
+`android/app/src/androidTest/java/io/radrower/HealthSyncExperimentTest.kt`;
+the earlier separate `HealthSyncExperiment.kt` file was removed. The simplified
+test has not yet been rerun. Next, investigate the summary differences and
+validate the production export on real workouts; its real-workout behavior and
+the relationship between distance and speed remain unverified. Readers may
+interpolate the production continuous series across pauses. Before re-exporting
+an old workout, remove its old Radrower data in Health Connect to avoid
+retaining duplicate distance windows.
 
 `bleak/02-connection.py` maintient la connexion avec le rameur (validé par
 l’utilisateur le 2026-11-14) : initialisation de 25 écritures puis poll

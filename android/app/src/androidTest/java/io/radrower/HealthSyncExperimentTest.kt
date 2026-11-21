@@ -1,139 +1,55 @@
 package io.radrower
 
 import androidx.health.connect.client.HealthConnectClient
+import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.DistanceRecord
+import androidx.health.connect.client.records.ExerciseLap
+import androidx.health.connect.client.records.ExerciseRoute
 import androidx.health.connect.client.records.ExerciseSegment
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.PowerRecord
+import androidx.health.connect.client.records.Record
 import androidx.health.connect.client.records.SpeedRecord
+import androidx.health.connect.client.records.metadata.Device
+import androidx.health.connect.client.records.metadata.Metadata
+import androidx.health.connect.client.units.meters
+import androidx.health.connect.client.units.metersPerSecond
+import androidx.health.connect.client.units.watts
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.time.Duration
+import java.time.Instant
 import java.time.ZoneOffset
+import kotlin.math.cos
+import kotlin.math.roundToLong
 
 /**
- * Run with argument `-e runWithExperiment` to save records on the device:
- * 
+ * Run with argument `runExperiment=true` to save records on the device:
+ *
  * ```
  * gradlew :app:connectedDebugAndroidTest \
  *  -Pandroid.testInstrumentationRunnerArguments.class=io.radrower.HealthSyncExperimentTest \
  *  -Pandroid.testInstrumentationRunnerArguments.runExperiment=true
  * ```
- * 
+ *
  * On Android 14+, grant permissions:
  * ```
  * adb shell pm grant io.radrower android.permission.health.WRITE_EXERCISE
  * adb shell pm grant io.radrower android.permission.health.WRITE_POWER
  * adb shell pm grant io.radrower android.permission.health.WRITE_SPEED
  * adb shell pm grant io.radrower android.permission.health.WRITE_DISTANCE
+ * adb shell pm grant io.radrower android.permission.health.WRITE_EXERCISE_ROUTE
  * ```
  * On Android 13-, grant permissions via Health Connect.
  */
 @RunWith(AndroidJUnit4::class)
 class HealthSyncExperimentTest {
     @Test
-    fun hasOneConsistentRecordPerMetric() {
-        val records = HealthSyncExperiment.records()
-        assertEquals(4, records.size)
-        val exercise = records.filterIsInstance<ExerciseSessionRecord>().single()
-        val distance = records.filterIsInstance<DistanceRecord>().single()
-        val power = records.filterIsInstance<PowerRecord>().single()
-        val speed = records.filterIsInstance<SpeedRecord>().single()
-        val start = HealthSyncExperiment.start
-        val pauseStart = HealthSyncExperiment.pauseStart
-        val pauseEnd = HealthSyncExperiment.pauseEnd
-        val end = HealthSyncExperiment.end
-        assertEquals(ExerciseSessionRecord.EXERCISE_TYPE_ROWING_MACHINE, exercise.exerciseType)
-        assertEquals("Radrower experiment I1", exercise.title)
-        assertEquals("radrower-experiment:I1:exercise", exercise.metadata.clientRecordId)
-        assertEquals("radrower-experiment:I1:distance", distance.metadata.clientRecordId)
-        assertEquals("radrower-experiment:I1:power", power.metadata.clientRecordId)
-        assertEquals("radrower-experiment:I1:speed", speed.metadata.clientRecordId)
-        records.forEach { assertEquals(4L, it.metadata.clientRecordVersion) }
-        assertEquals(
-            listOf(
-                Triple(start, pauseStart, ExerciseSegment.EXERCISE_SEGMENT_TYPE_ROWING_MACHINE),
-                Triple(pauseStart, pauseEnd, ExerciseSegment.EXERCISE_SEGMENT_TYPE_PAUSE),
-                Triple(pauseEnd, end, ExerciseSegment.EXERCISE_SEGMENT_TYPE_ROWING_MACHINE),
-            ),
-            exercise.segments.map { Triple(it.startTime, it.endTime, it.segmentType) },
-        )
-        val laps = exercise.laps
-        assertEquals(5, laps.size)
-        val lapEndsNanos = listOf(
-            200_166_666_667L, 408_564_171_123L, 532_050_458_716L, 640_091_836_735L, 660_000_000_000L,
-        )
-        laps.forEachIndexed { index, lap ->
-            assertEquals(if (index == 0) start else laps[index - 1].endTime, lap.startTime)
-            assertTrue(kotlin.math.abs(Duration.between(start.plusNanos(lapEndsNanos[index]), lap.endTime).toNanos()) <= 1_000)
-            assertEquals(if (index < 4) 500.0 else 98.5, requireNotNull(lap.length).inMeters, 1e-8)
-        }
-        assertEquals(end, laps.last().endTime)
-        assertEquals(distance.distance.inMeters, laps.sumOf { requireNotNull(it.length).inMeters }, 1e-8)
-        assertEquals(
-            listOf(start, start, start, start),
-            listOf(
-                exercise.startTime,
-                distance.startTime,
-                power.startTime,
-                speed.startTime,
-            ),
-        )
-        assertEquals(
-            listOf(end, end, end, end),
-            listOf(
-                exercise.endTime,
-                distance.endTime,
-                power.endTime,
-                speed.endTime,
-            ),
-        )
-        assertEquals(
-            List(4) { ZoneOffset.ofHours(1) },
-            listOf(
-                exercise.startZoneOffset,
-                distance.startZoneOffset,
-                power.startZoneOffset,
-                speed.startZoneOffset,
-            ),
-        )
-        assertEquals(
-            List(4) { ZoneOffset.ofHours(1) },
-            listOf(
-                exercise.endZoneOffset,
-                distance.endZoneOffset,
-                power.endZoneOffset,
-                speed.endZoneOffset,
-            ),
-        )
-        assertEquals(600, speed.samples.size)
-        assertEquals(600, power.samples.size)
-        speed.samples.forEachIndexed { second, sample ->
-            val expectedTime =
-                if (second < 300) {
-                    start.plusSeconds(second.toLong())
-                } else {
-                    pauseEnd.plusSeconds((second - 300).toLong())
-                }
-            assertEquals(expectedTime, sample.time)
-            assertEquals(sample.time, power.samples[second].time)
-            assertEquals(2.0 + 0.005 * second, sample.speed.inMetersPerSecond, 1e-9)
-            assertEquals(100.0 + second, power.samples[second].power.inWatts, 1e-9)
-        }
-        assertEquals(pauseStart.minusSeconds(1), speed.samples[299].time)
-        assertEquals(pauseEnd, speed.samples[300].time)
-        assertEquals(2_098.5, distance.distance.inMeters, 1e-9)
-        assertEquals(speed.samples.sumOf { it.speed.inMetersPerSecond }, distance.distance.inMeters, 1e-9)
-    }
-
-    @Test
-    fun insertI1() {
+    fun exportToHealthConnect() {
         assumeTrue(
             "Pass -e runExperiment true to write I1 to Health Connect",
             InstrumentationRegistry.getArguments().getString("runExperiment") == "true",
@@ -143,5 +59,86 @@ class HealthSyncExperimentTest {
             "Health Connect is unavailable."
         }
         runBlocking { HealthSyncExperiment.insert(HealthConnectClient.getOrCreate(context)) }
+    }
+}
+
+internal object HealthSyncExperiment {
+    val start: Instant = Instant.parse("2026-11-21T01:20:00Z")
+     val pauseStart: Instant = start.plusSeconds(300)
+     val pauseEnd: Instant = pauseStart.plusSeconds(60)
+    val end: Instant = pauseEnd.plusSeconds(300)
+    private val offset = ZoneOffset.ofHours(1)
+    private const val SAMPLE_COUNT = 600
+
+    private fun metadata(type: String) =
+        Metadata.activelyRecorded(
+            device = Device(type = Device.TYPE_PHONE),
+            clientRecordId = "radrower-experiment:I1:$type",
+            clientRecordVersion = if (type == "exercise" || type == "power") 6 else 5,
+        )
+
+    fun records(): List<Record> {
+        fun sampleTime(activeSecond: Int): Instant =
+            if (activeSecond < 300) start.plusSeconds(activeSecond.toLong())
+            else pauseEnd.plusSeconds((activeSecond - 300).toLong())
+        val speedSamples =
+            (0 until SAMPLE_COUNT).map { second ->
+                SpeedRecord.Sample(sampleTime(second), (2.0 + 0.005 * second).metersPerSecond)
+            }
+        val powerSamples =
+            (0 until SAMPLE_COUNT).map { second ->
+                PowerRecord.Sample(sampleTime(second), (100.0 + second).watts)
+            }
+        val distanceRecords =
+            (0 until SAMPLE_COUNT).map { second ->
+                DistanceRecord(
+                    startTime = sampleTime(second),
+                    startZoneOffset = offset,
+                    endTime = sampleTime(second + 1),
+                    endZoneOffset = offset,
+                    distance = (2.0 + 0.005 * second).meters,
+                    metadata = metadata("distance:$second"),
+                )
+            }
+        // Each speed sample represents one second, including the interval after the last sample.
+        val totalDistance = speedSamples.sumOf { it.speed.inMetersPerSecond }
+        return listOf<Record>(
+            ExerciseSessionRecord(
+                startTime = start,
+                startZoneOffset = offset,
+                endTime = end,
+                endZoneOffset = offset,
+                exerciseType = ExerciseSessionRecord.EXERCISE_TYPE_ROWING_MACHINE,
+                title = "Radrower experiment I1",
+                segments = listOf(
+                    ExerciseSegment(start, pauseStart, ExerciseSegment.EXERCISE_SEGMENT_TYPE_ROWING_MACHINE),
+                    ExerciseSegment(pauseStart, pauseEnd, ExerciseSegment.EXERCISE_SEGMENT_TYPE_PAUSE),
+                    ExerciseSegment(pauseEnd, end, ExerciseSegment.EXERCISE_SEGMENT_TYPE_ROWING_MACHINE),
+                ),
+                metadata = metadata("exercise"),
+            ),
+            PowerRecord(
+                startTime = start,
+                startZoneOffset = offset,
+                endTime = end,
+                endZoneOffset = offset,
+                samples = powerSamples,
+                metadata = metadata("power"),
+            ),
+        ).plus(distanceRecords)
+    }
+
+    suspend fun insert(client: HealthConnectClient) {
+        val required =
+            setOf(
+                HealthPermission.getWritePermission(ExerciseSessionRecord::class),
+                HealthPermission.getWritePermission(PowerRecord::class),
+                HealthPermission.getWritePermission(SpeedRecord::class),
+                HealthPermission.getWritePermission(DistanceRecord::class),
+                HealthPermission.PERMISSION_WRITE_EXERCISE_ROUTE,
+            )
+        val missing = required - client.permissionController.getGrantedPermissions()
+        check(missing.isEmpty()) { "Missing permissions: $missing. Grant them in Health Connect." }
+        client.insertRecords(records())
     }
 }

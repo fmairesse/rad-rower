@@ -16,6 +16,9 @@ all five Health Connect write permissions when Health Connect is available.
 If Health Connect is unavailable, install or update it before exporting. A
 denied Health Connect permission can be requested again when exporting;
 local recording does not depend on it.
+Debug builds declare permission to write exercise routes for the synthetic
+Health Connect experiment, although the current experiment does not write a
+route. Production exports do not contain routes.
 
 Keep the app in the foreground: the screen stays awake while the connected
 rower reports an active session. It can turn off normally when the session is
@@ -105,6 +108,22 @@ Health Connect must be installed and available on the device. A synthetic
 export was written to Health Connect on an emulator, and the I1 synthetic
 layout was viewed in Intervals.icu. Export and downstream behavior still need
 validation with a real workout; local recording remains independent.
+
+Run the opt-in synthetic Health Connect insertion test on a connected phone
+from the repository root:
+
+```sh
+android/tools/run-health-sync-experiment.sh
+# If multiple devices are connected:
+android/tools/run-health-sync-experiment.sh --serial DEVICE
+```
+
+The test inserts a synthetic rowing session with pause segments, power samples
+and individual distance records. It no longer asserts the record structure and
+does not write speed samples, laps or a route. The script installs a debug
+build and writes or updates the synthetic I1 records in Health Connect. On
+Android 14 and newer it grants the five permissions required by the test with
+`adb`; on older versions, grant them in the Health Connect app when prompted.
 
 To force a new export of existing workouts (for example to make Health Sync
 import them again), give them new IDs on a phone connected with `adb`. The
