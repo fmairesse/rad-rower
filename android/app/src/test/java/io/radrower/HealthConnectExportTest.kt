@@ -15,8 +15,8 @@ import java.time.ZoneOffset
 class HealthConnectExportTest {
     private val start = 1_700_000_000_000L
 
-    private fun workout(distanceM: Double?) = Workout(
-        id = "laps",
+    private fun workout(distanceM: Double? = 1_234.0) = Workout(
+        id = "workout",
         startedAtEpochMs = start,
         startedOffsetS = 0,
         endedAtEpochMs = start + 10_000,
@@ -25,137 +25,148 @@ class HealthConnectExportTest {
         status = "completed",
         partial = false,
         distanceM = distanceM,
+        caloriesKcal = 12.5,
     )
 
-    private fun distanceSample(sequence: Int, elapsedMs: Long, distanceM: Double?, id: String = "laps") =
-        WorkoutSample(
-            workoutId = id,
-            sequence = sequence,
-            timestampEpochMs = start + elapsedMs,
-            offsetS = 0,
-            sessionState = 2,
-            resistanceLevel = 1,
-            distanceM = distanceM,
-        )
-
-    private fun laps(
-        distanceM: Double?,
-        samples: List<WorkoutSample>,
-        segments: List<Segment> = emptyList(),
-    ) = HealthConnectExport.records(workout(distanceM), samples, segments)
-        .filterIsInstance<ExerciseSessionRecord>().single().laps
+    private fun sample(
+        sequence: Int,
+        elapsedMs: Long,
+        distanceM: Double? = null,
+        sessionState: Int = SessionState.IN_PROGRESS.code,
+        powerW: Double? = null,
+        speedKmh: Double? = null,
+        id: String = "workout",
+    ) = WorkoutSample(
+        workoutId = id,
+        sequence = sequence,
+        timestampEpochMs = start + elapsedMs,
+        offsetS = 0,
+        sessionState = sessionState,
+        powerW = powerW,
+        resistanceLevel = 1,
+        distanceM = distanceM,
+        speedKmh = speedKmh,
+    )
 
     @Test
-    fun createsHealthConnectRecordsFromWorkoutAndSamples() {
-        val start = 1_700_000_000_000L
-        val end = start + 10_000
-        val workout = Workout(
-            id = "workout-1",
-            startedAtEpochMs = start,
-            startedOffsetS = 3_600,
-            endedAtEpochMs = end,
-            endedOffsetS = 3_600,
-            lastSampleAtEpochMs = end,
-            lastSampleOffsetS = 3_600,
-            status = "completed",
-            partial = false,
-            distanceM = 123.0,
-            caloriesKcal = 12.5,
-        )
-        fun sample(
-            sequence: Int,
-            elapsedMs: Long,
-            sessionState: Int,
-            powerW: Double,
-            speedKmh: Double,
-        ) = WorkoutSample(
-            workoutId = workout.id,
-            sequence = sequence,
-            timestampEpochMs = start + elapsedMs,
-            offsetS = 3_600,
-            sessionState = sessionState,
-            powerW = powerW,
-            resistanceLevel = 1,
-            speedKmh = speedKmh,
-        )
+    fun exportsSessionActiveCaloriesAndPowerButNoSpeedOrLaps() {
+        val workout = workout(distanceM = null)
         val samples = listOf(
-            sample(0, 0, 2, 100.0, 18.0),
-            sample(1, 1_000, 2, 150.0, 21.6),
-            sample(2, 2_000, 3, 0.0, 0.0),
-            sample(3, 3_000, 3, 200.0, 36.0),
-            sample(4, 4_000, 2, 180.0, 25.2),
+            sample(0, 0, powerW = 100.0, speedKmh = 18.0),
+            sample(1, 1_000, powerW = 150.0, speedKmh = 21.6),
         )
 
-        val segments = listOf(
-            Segment(workout.id, 0, "rowing", start, start + 2_000),
-            Segment(workout.id, 1, "pause", start + 2_000, start + 4_000),
-            Segment(workout.id, 2, "rowing", start + 4_000, end),
-        )
-        val records = HealthConnectExport.records(workout, samples, segments)
+        val records = HealthConnectExport.records(workout, samples)
 
-        assertEquals(5, records.size)
         val session = records.filterIsInstance<ExerciseSessionRecord>().single()
         assertEquals(ExerciseSessionRecord.EXERCISE_TYPE_ROWING_MACHINE, session.exerciseType)
         assertEquals("Indoor rowing", session.title)
         assertEquals(Instant.ofEpochMilli(start), session.startTime)
-        assertEquals(Instant.ofEpochMilli(end), session.endTime)
-        assertEquals(ZoneOffset.ofHours(1), session.startZoneOffset)
-        assertEquals(ZoneOffset.ofHours(1), session.endZoneOffset)
-        assertEquals("radrower:workout-1:exercise", session.metadata.clientRecordId)
-        assertEquals(3L, session.metadata.clientRecordVersion)
-        assertEquals(
-            listOf(
-                ExerciseSegment.EXERCISE_SEGMENT_TYPE_ROWING_MACHINE,
-                ExerciseSegment.EXERCISE_SEGMENT_TYPE_PAUSE,
-                ExerciseSegment.EXERCISE_SEGMENT_TYPE_ROWING_MACHINE,
-            ),
-            session.segments.map { it.segmentType },
-        )
-        assertEquals(segments.map { it.startedAtEpochMs }, session.segments.map { it.startTime.toEpochMilli() })
-        assertEquals(segments.map { it.endedAtEpochMs }, session.segments.map { it.endTime.toEpochMilli() })
+        assertEquals(Instant.ofEpochMilli(start + 10_000), session.endTime)
+        assertEquals(ZoneOffset.UTC, session.startZoneOffset)
+        assertEquals("radrower:workout:exercise", session.metadata.clientRecordId)
+        assertEquals(4L, session.metadata.clientRecordVersion)
+        assertTrue(session.laps.isEmpty())
 
-        val distance = records.filterIsInstance<DistanceRecord>().single()
-        assertEquals(123.0, distance.distance.inMeters, 0.0)
-        assertEquals(session.startTime, distance.startTime)
-        assertEquals(session.endTime, distance.endTime)
-        assertEquals("radrower:workout-1:distance", distance.metadata.clientRecordId)
-        assertEquals(6L, distance.metadata.clientRecordVersion)
-
-        val calories = records.filterIsInstance<ActiveCaloriesBurnedRecord>().single()
-        assertEquals(12.5, calories.energy.inKilocalories, 0.0)
-        assertEquals("radrower:workout-1:active-calories", calories.metadata.clientRecordId)
+        val activeCalories = records.filterIsInstance<ActiveCaloriesBurnedRecord>().single()
+        assertEquals(12.5, activeCalories.energy.inKilocalories, 0.0)
+        assertEquals("radrower:workout:active-calories", activeCalories.metadata.clientRecordId)
 
         val power = records.filterIsInstance<PowerRecord>().single()
-        assertEquals(listOf(start, start + 1_000, start + 4_000), power.samples.map { it.time.toEpochMilli() })
-        assertEquals(listOf(100.0, 150.0, 180.0), power.samples.map { it.power.inWatts })
-        assertEquals("radrower:workout-1:power", power.metadata.clientRecordId)
-
-        val speed = records.filterIsInstance<SpeedRecord>().single()
-        assertEquals(listOf(start, start + 1_000, start + 4_000), speed.samples.map { it.time.toEpochMilli() })
-        assertEquals(5.0, speed.samples[0].speed.inMetersPerSecond, 1e-9)
-        assertEquals(6.0, speed.samples[1].speed.inMetersPerSecond, 1e-9)
-        assertEquals(7.0, speed.samples[2].speed.inMetersPerSecond, 1e-9)
-        assertEquals("radrower:workout-1:speed", speed.metadata.clientRecordId)
-
+        assertEquals(listOf(start, start + 1_000), power.samples.map { it.time.toEpochMilli() })
+        assertTrue(records.none { it is SpeedRecord })
+        assertEquals(
+            setOf(
+                "android.permission.health.WRITE_EXERCISE",
+                "android.permission.health.WRITE_ACTIVE_CALORIES_BURNED",
+                "android.permission.health.WRITE_POWER",
+            ),
+            HealthConnectExport.permissionsFor(workout, samples),
+        )
         assertEquals(
             setOf(
                 "android.permission.health.WRITE_EXERCISE",
                 "android.permission.health.WRITE_DISTANCE",
                 "android.permission.health.WRITE_ACTIVE_CALORIES_BURNED",
                 "android.permission.health.WRITE_POWER",
-                "android.permission.health.WRITE_SPEED",
             ),
-            HealthConnectExport.permissionsFor(workout, samples),
+            HealthConnectExport.allWritePermissions,
         )
-        assertEquals(HealthConnectExport.permissionsFor(workout, samples), HealthConnectExport.allWritePermissions)
+    }
+
+    @Test
+    fun interpolatesDistanceIntoOneSecondRecordsAndAClippedFinalRecord() {
+        val samples = listOf(
+            sample(0, 0, distanceM = 0.0),
+            sample(1, 3_500, distanceM = 35.0),
+            sample(2, 4_500, distanceM = 55.0),
+        )
+
+        val distances = HealthConnectExport.records(workout(), samples).filterIsInstance<DistanceRecord>()
+
+        assertEquals(
+            listOf(
+                start to start + 1_000,
+                start + 1_000 to start + 2_000,
+                start + 2_000 to start + 3_000,
+                start + 3_000 to start + 4_000,
+                start + 4_000 to start + 4_500,
+            ),
+            distances.map { it.startTime.toEpochMilli() to it.endTime.toEpochMilli() },
+        )
+        assertEquals(listOf(10.0, 10.0, 10.0, 15.0, 10.0), distances.map { it.distance.inMeters })
+        assertEquals(55.0, distances.sumOf { it.distance.inMeters }, 1e-9)
+        assertEquals("radrower:workout:distance", distances.first().metadata.clientRecordId)
+        assertEquals("radrower:workout:distance:4", distances.last().metadata.clientRecordId)
+        assertTrue(distances.all { it.metadata.clientRecordVersion == 7L })
+    }
+
+    @Test
+    fun excludesPausesAndCounterResetsFromDistanceWindows() {
+        val samples = listOf(
+            sample(0, 0, distanceM = 0.0),
+            sample(1, 2_000, distanceM = 20.0),
+            sample(2, 3_000, distanceM = 0.0, sessionState = SessionState.PAUSED.code),
+            sample(3, 4_000, distanceM = 0.0),
+            sample(4, 5_000, distanceM = 0.0, sessionState = SessionState.IN_PROGRESS.code),
+            sample(5, 7_000, distanceM = 30.0),
+        )
+
+        val distances = HealthConnectExport.records(workout(), samples).filterIsInstance<DistanceRecord>()
+
+        assertEquals(listOf(10.0, 10.0, 15.0, 15.0), distances.map { it.distance.inMeters })
+        assertEquals(
+            listOf(
+                start to start + 1_000,
+                start + 1_000 to start + 2_000,
+                start + 5_000 to start + 6_000,
+                start + 6_000 to start + 7_000,
+            ),
+            distances.map { it.startTime.toEpochMilli() to it.endTime.toEpochMilli() },
+        )
+    }
+
+    @Test
+    fun requiresActiveDistanceSamplesRatherThanSummaryOnly() {
+        val workout = workout(distanceM = 1_234.0)
+
+        assertTrue(HealthConnectExport.records(workout).none { it is DistanceRecord })
+        assertTrue(
+            "android.permission.health.WRITE_DISTANCE" !in HealthConnectExport.permissionsFor(workout),
+        )
     }
 
     @Test
     fun omitsZeroDurationSegmentsButRejectsInvalidSegments() {
         val workout = Workout(
-            id = "test", startedAtEpochMs = 100, startedOffsetS = 0,
-            endedAtEpochMs = 300, lastSampleAtEpochMs = 300, lastSampleOffsetS = 0,
-            status = "completed", partial = false,
+            id = "test",
+            startedAtEpochMs = 100,
+            startedOffsetS = 0,
+            endedAtEpochMs = 300,
+            lastSampleAtEpochMs = 300,
+            lastSampleOffsetS = 0,
+            status = "completed",
+            partial = false,
         )
         val session = HealthConnectExport.records(
             workout,
@@ -180,72 +191,5 @@ class HealthConnectExportTest {
             } catch (_: IllegalStateException) {
             }
         }
-    }
-
-    @Test
-    fun interpolatesLapsAcrossKnownPauseAndIncludesRemainder() {
-        val samples = listOf(
-            distanceSample(0, 0, 0.0),
-            distanceSample(1, 1_000, 400.0),
-            distanceSample(2, 9_000, 1_200.0),
-        )
-        val segments = listOf(
-            Segment("laps", 0, "rowing", start, start + 3_000),
-            Segment("laps", 1, "pause", start + 3_000, start + 7_000),
-            Segment("laps", 2, "rowing", start + 7_000, start + 10_000),
-        )
-        val laps = laps(1_200.0, samples, segments)
-        assertEquals(listOf(500.0, 500.0, 200.0), laps.map { it.length!!.inMeters })
-        assertEquals(
-            listOf(start + 1_500, start + 8_000, start + 10_000),
-            laps.map { it.endTime.toEpochMilli() },
-        )
-        assertEquals(
-            listOf(start, start + 1_500, start + 8_000),
-            laps.map { it.startTime.toEpochMilli() },
-        )
-    }
-
-    @Test
-    fun handlesCounterPlateausResetsAndExactDistance() {
-        val samples = listOf(
-            distanceSample(0, 0, 0.0),
-            distanceSample(1, 1_000, 400.0),
-            distanceSample(2, 4_000, 400.0),
-            distanceSample(3, 5_000, 0.0),
-            distanceSample(4, 6_000, 600.0),
-            distanceSample(5, 10_000, 1_000.0),
-        )
-        val laps = laps(1_000.0, samples)
-        assertEquals(listOf(500.0, 500.0), laps.map { it.length!!.inMeters })
-        assertEquals(listOf(start + 5_000, start + 10_000), laps.map { it.endTime.toEpochMilli() })
-    }
-
-    @Test
-    fun ignoresInvalidAndUnrelatedReadingsAndExportsShortWorkout() {
-        val samples = listOf(
-            distanceSample(0, 0, 0.0),
-            distanceSample(1, 1_000, Double.NaN),
-            distanceSample(2, 2_000, -1.0),
-            distanceSample(3, 3_000, 600.0, id = "other"),
-            distanceSample(4, 4_000, 1_000.0),
-            distanceSample(5, 5_000, 600.0),
-            distanceSample(6, 11_000, 600.0),
-        )
-        val laps = laps(600.0, samples)
-        assertEquals(listOf(500.0, 100.0), laps.map { it.length!!.inMeters })
-        assertEquals(start + 4_166, laps.first().endTime.toEpochMilli())
-        assertEquals(listOf(123.0), laps(123.0, emptyList()).map { it.length!!.inMeters })
-        assertTrue(laps(null, samples).isEmpty())
-        assertTrue(laps(0.0, samples).isEmpty())
-    }
-
-    @Test
-    fun omitsLapsWhenCrossingsCannotBeLocated() {
-        assertTrue(laps(1_000.0, emptyList()).isEmpty())
-        assertTrue(laps(1_000.0, listOf(distanceSample(0, 5_000, 700.0))).isEmpty())
-        assertTrue(laps(500.0, listOf(distanceSample(0, 0, 500.0))).isEmpty())
-        val segments = listOf(Segment("laps", 0, "pause", start, start + 10_000))
-        assertTrue(laps(500.0, listOf(distanceSample(0, 10_000, 500.0)), segments).isEmpty())
     }
 }

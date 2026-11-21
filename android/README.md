@@ -12,7 +12,7 @@ On Android 12 and newer, grant the nearby-devices permissions. On Android 11
 and earlier, Bluetooth scanning requires location permission and may require
 location services to be enabled. Bluetooth itself must also be enabled.
 At launch, the app requests the applicable Bluetooth permissions, followed by
-all five Health Connect write permissions when Health Connect is available.
+all four Health Connect write permissions when Health Connect is available.
 If Health Connect is unavailable, install or update it before exporting. A
 denied Health Connect permission can be requested again when exporting;
 local recording does not depend on it.
@@ -74,35 +74,28 @@ configured app backup behavior also applies to the database.
 
 Completed, non-partial workouts can be exported from **Workout history** to
 Health Connect. Export is always initiated by the user. Radrower writes an
-indoor rowing exercise session, one distance record using the stored cumulative
-distance, active calories, and separate timestamped power and speed records.
-The session includes the stored rowing and pause segments; zero-duration
-segments are omitted because Health Connect requires a positive duration.
-It also includes 500 m laps and, when needed, a shorter final lap. Lap
-boundaries are estimated by linear interpolation of saved cumulative distance
-readings, assuming distance starts at zero and progresses uniformly between
-readings during non-pause time. Known pause segments are excluded from that
-interpolation but remain part of the lap's elapsed duration. The estimates
-may be inaccurate when readings are sparse or pauses are missing.
-Counter decreases are ignored, as in the stored summary. If a 500 m boundary
-cannot be placed with the available samples, the workout is exported without
-laps and the export message says so.
-The stored distance is the highest valid rower counter value, and may differ
-from the integral of the speed series.
-Speed is derived from the rower's reported pace and converted from km/h to m/s;
-it is not reconstructed from the distance counter. Only active-session power and
-speed samples are exported; pause, missing and invalid samples are omitted.
-Each series spans the whole session, so readers may interpolate across pauses.
-Other raw telemetry is not exported. Radrower does not read Health Connect data.
+indoor rowing exercise session, active calories when available,
+one-second distance records derived from the rower's cumulative counter, and a
+timestamped power record when measured samples are available. The session
+includes the stored rowing and pause segments; zero-duration segments are
+omitted because Health Connect requires a positive duration.
+Distance is linearly interpolated between saved counter readings at one-second
+boundaries during active stretches. Counter decreases and pause readings are
+ignored; the final interval in a stretch can be shorter than one second.
+Only positive distance intervals are written, so sparse readings or counter
+plateaus can leave some seconds without a record. The exported distance series
+may differ from the stored summary total. Speed records and exercise laps are
+not exported. Only active-session power samples are exported; pause, missing
+and invalid samples are omitted. Other raw telemetry is not exported.
+Radrower does not read Health Connect data.
 If a needed permission was not granted at launch, it is requested at export;
 export errors are shown in the
 history. Repeating an export uses stable client record IDs to avoid creating
 another copy of the same workout.
 
 Before re-exporting a workout exported with an older version, remove its old
-Radrower data in Health Connect. The new distance record replaces the first
-old record, but additional distance windows from previous exports are not
-removed and would otherwise duplicate distance.
+Radrower data in Health Connect. Old distance records are not removed
+automatically and would otherwise duplicate distance.
 
 Health Connect must be installed and available on the device. A synthetic
 export was written to Health Connect on an emulator, and the I1 synthetic
@@ -122,7 +115,7 @@ The test inserts a synthetic rowing session with pause segments, power samples
 and individual distance records. It no longer asserts the record structure and
 does not write speed samples, laps or a route. The script installs a debug
 build and writes or updates the synthetic I1 records in Health Connect. On
-Android 14 and newer it grants the five permissions required by the test with
+Android 14 and newer it grants the four permissions required by the test with
 `adb`; on older versions, grant them in the Health Connect app when prompted.
 
 To force a new export of existing workouts (for example to make Health Sync

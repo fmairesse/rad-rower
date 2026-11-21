@@ -42,16 +42,16 @@ remain distinct. Linux experimentation tools continue to report raw values.
 The persistence and UI tests pass with simulated data on an Android 16
 emulator; the recording has not yet been tested on the real rower. Completed,
 non-partial workouts can now be exported on request to Health Connect as an
-indoor rowing session with one saved cumulative distance, active-calorie totals
-and timestamped power and speed measurements while active. Speed is derived
-from reported pace; pause samples are excluded from both series.
+indoor rowing session with active calories, one-second distance records
+interpolated from active counter readings, and timestamped power measurements
+while active. Exercise laps and speed records are not exported.
 At launch, the app requests Bluetooth permissions and, when Health Connect is
-available, all five Health Connect write permissions. Missing permissions can
+available, all four Health Connect write permissions. Missing permissions can
 still be requested at export, and local recording remains independent. The
 startup permission flow has not yet been validated on a device.
-A synthetic production export was inserted and removed on an
-emulator with Health Connect; real-workout and permission UX validation are
-still needed. See `android/README.md` for operation and limitations.
+A previous production layout was inserted and removed synthetically on an
+emulator; the current layout and permission UX still need device validation.
+See `android/README.md` for operation and limitations.
 
 Android workouts now persist rowing and pause segments at observed session-state
 transitions, closing them on completion, disconnection or recovery. Completed
@@ -63,13 +63,15 @@ the persistence and export tests pass with simulated data on an Android 16
 emulator, and the local export conversion tests pass. See
 `WorkoutPersistenceTest.kt` and `HealthConnectExportTest.kt`.
 
-The production Health Connect export now includes 500 m laps and a shorter
-final lap when needed. Boundaries are interpolated from saved cumulative
-distance, excluding known pauses from the interpolated active time; this is an
-estimate, not a rower measurement. When samples cannot locate every boundary,
-the export omits laps and reports that to the user. Local conversion tests cover
-pauses, resets and missing data; real Health Connect and downstream behavior
-for this production layout still need validation.
+The current production Health Connect export writes active-calorie records,
+one-second distance records interpolated between cumulative counter
+readings in active stretches, and active power samples. It no longer writes
+exercise laps or speed records. Counter decreases and pause readings are
+ignored; the final distance interval in an active stretch may be shorter than
+one second, and zero-distance intervals are omitted. Focused local conversion
+tests cover interpolation, pauses, resets, calorie records and the absence of
+speed records. The current Health Connect layout still needs device and
+downstream-app validation.
 
 The user no longer wants to tailor Health Connect exports to Strava and reports
 that the earlier D2 speed-series experiment worked with Intervals.icu. On
@@ -77,18 +79,12 @@ that the earlier D2 speed-series experiment worked with Intervals.icu. On
 rowing session with power and speed series and a total distance. The user's
 Intervals.icu screenshot shows increasing pace and power curves, 2.09 km and
 9:58 for the 2,098.5 m, 10:00 test; the small summary differences remain
-unexplained. On 2026-11-21, the opt-in instrumentation test was simplified to
-insert a synthetic rowing session with pause segments, power samples and
-individual distance records; it no longer checks record structure and does not
-include speed samples, laps or a route. The test is in
-`android/app/src/androidTest/java/io/radrower/HealthSyncExperimentTest.kt`;
-the earlier separate `HealthSyncExperiment.kt` file was removed. The simplified
-test has not yet been rerun. Next, investigate the summary differences and
-validate the production export on real workouts; its real-workout behavior and
-the relationship between distance and speed remain unverified. Readers may
-interpolate the production continuous series across pauses. Before re-exporting
-an old workout, remove its old Radrower data in Health Connect to avoid
-retaining duplicate distance windows.
+unexplained. The opt-in experiment at
+`android/app/src/androidTest/java/io/radrower/HealthSyncExperimentTest.kt`
+inserts a synthetic rowing session with pause segments, power samples and
+individual distance records; it is separate from the production export.
+Before re-exporting an old workout, remove its old Radrower data in Health
+Connect to avoid retaining old distance records.
 
 `bleak/02-connection.py` maintient la connexion avec le rameur (validé par
 l’utilisateur le 2026-11-14) : initialisation de 25 écritures puis poll

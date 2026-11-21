@@ -3,17 +3,13 @@ package io.radrower
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.DistanceRecord
-import androidx.health.connect.client.records.ExerciseLap
-import androidx.health.connect.client.records.ExerciseRoute
 import androidx.health.connect.client.records.ExerciseSegment
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.PowerRecord
 import androidx.health.connect.client.records.Record
-import androidx.health.connect.client.records.SpeedRecord
 import androidx.health.connect.client.records.metadata.Device
 import androidx.health.connect.client.records.metadata.Metadata
 import androidx.health.connect.client.units.meters
-import androidx.health.connect.client.units.metersPerSecond
 import androidx.health.connect.client.units.watts
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -40,7 +36,6 @@ import kotlin.math.roundToLong
  * ```
  * adb shell pm grant io.radrower android.permission.health.WRITE_EXERCISE
  * adb shell pm grant io.radrower android.permission.health.WRITE_POWER
- * adb shell pm grant io.radrower android.permission.health.WRITE_SPEED
  * adb shell pm grant io.radrower android.permission.health.WRITE_DISTANCE
  * adb shell pm grant io.radrower android.permission.health.WRITE_EXERCISE_ROUTE
  * ```
@@ -81,10 +76,6 @@ internal object HealthSyncExperiment {
         fun sampleTime(activeSecond: Int): Instant =
             if (activeSecond < 300) start.plusSeconds(activeSecond.toLong())
             else pauseEnd.plusSeconds((activeSecond - 300).toLong())
-        val speedSamples =
-            (0 until SAMPLE_COUNT).map { second ->
-                SpeedRecord.Sample(sampleTime(second), (2.0 + 0.005 * second).metersPerSecond)
-            }
         val powerSamples =
             (0 until SAMPLE_COUNT).map { second ->
                 PowerRecord.Sample(sampleTime(second), (100.0 + second).watts)
@@ -100,8 +91,6 @@ internal object HealthSyncExperiment {
                     metadata = metadata("distance:$second"),
                 )
             }
-        // Each speed sample represents one second, including the interval after the last sample.
-        val totalDistance = speedSamples.sumOf { it.speed.inMetersPerSecond }
         return listOf<Record>(
             ExerciseSessionRecord(
                 startTime = start,
@@ -133,7 +122,6 @@ internal object HealthSyncExperiment {
             setOf(
                 HealthPermission.getWritePermission(ExerciseSessionRecord::class),
                 HealthPermission.getWritePermission(PowerRecord::class),
-                HealthPermission.getWritePermission(SpeedRecord::class),
                 HealthPermission.getWritePermission(DistanceRecord::class),
                 HealthPermission.PERMISSION_WRITE_EXERCISE_ROUTE,
             )

@@ -4,40 +4,34 @@ import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.DistanceRecord
-import androidx.health.connect.client.records.ExerciseLap
 import androidx.health.connect.client.records.ExerciseSegment
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.PowerRecord
 import androidx.health.connect.client.records.Record
-import androidx.health.connect.client.records.SpeedRecord
 import androidx.health.connect.client.records.metadata.Device
 import androidx.health.connect.client.records.metadata.Metadata
 import androidx.health.connect.client.units.kilocalories
 import androidx.health.connect.client.units.meters
-import androidx.health.connect.client.units.metersPerSecond
 import androidx.health.connect.client.units.watts
 import java.time.Instant
 import java.time.ZoneOffset
-import kotlin.math.roundToLong
 
 internal object HealthConnectExport {
-    data class ExportResult(val lapsUnavailable: Boolean)
+    private const val DISTANCE_WINDOW_MILLIS = 1_000L
 
     val allWritePermissions: Set<String> = setOf(
         HealthPermission.getWritePermission(ExerciseSessionRecord::class),
         HealthPermission.getWritePermission(DistanceRecord::class),
         HealthPermission.getWritePermission(ActiveCaloriesBurnedRecord::class),
         HealthPermission.getWritePermission(PowerRecord::class),
-        HealthPermission.getWritePermission(SpeedRecord::class),
     )
 
     // Health Connect guidance: at most 1000 records per write request.
     private const val MAX_RECORDS_PER_INSERT = 1_000
 
     // Bumped when the distance record layout changes so that re-exports overwrite older records.
-    private const val DISTANCE_RECORD_VERSION = 6L
-    private const val EXERCISE_RECORD_VERSION = 3L
-    private const val LAP_DISTANCE_M = 500.0
+    private const val DISTANCE_RECORD_VERSION = 7L
+    private const val EXERCISE_RECORD_VERSION = 4L
 
     fun isEligible(workout: Workout): Boolean =
         workout.status == "completed" &&
@@ -47,7 +41,7 @@ internal object HealthConnectExport {
 
     fun permissionsFor(workout: Workout, samples: List<WorkoutSample> = emptyList()): Set<String> = buildSet {
         add(HealthPermission.getWritePermission(ExerciseSessionRecord::class))
-        if (workout.distanceM.isPositiveFinite()) {
+        if (distanceIntervals(workout, samples).isNotEmpty()) {
             add(HealthPermission.getWritePermission(DistanceRecord::class))
         }
         if (workout.caloriesKcal.isPositiveFinite()) {
@@ -55,9 +49,6 @@ internal object HealthConnectExport {
         }
         if (activeMetricSamples(workout, samples) { it.powerW }.isNotEmpty()) {
             add(HealthPermission.getWritePermission(PowerRecord::class))
-        }
-        if (activeMetricSamples(workout, samples) { it.speedKmh }.isNotEmpty()) {
-            add(HealthPermission.getWritePermission(SpeedRecord::class))
         }
     }
 
@@ -102,18 +93,21 @@ internal object HealthConnectExport {
                 exerciseType = ExerciseSessionRecord.EXERCISE_TYPE_ROWING_MACHINE,
                 title = "Indoor rowing",
                 segments = exerciseSegments,
-                laps = workoutLaps(workout, samples, segments),
                 metadata = metadata(sessionId, clientRecordVersion = EXERCISE_RECORD_VERSION),
             ),
         )
-        workout.distanceM.takeIf { it.isPositiveFinite() }?.let { distanceM ->
+        distanceIntervals(workout, samples).forEachIndexed { index, interval ->
             records += DistanceRecord(
-                startTime = start,
-                startZoneOffset = startOffset,
-                endTime = end,
-                endZoneOffset = endOffset,
-                distance = distanceM.meters,
-                metadata = metadata("radrower:${workout.id}:distance", clientRecordVersion = DISTANCE_RECORD_VERSION),
+                startTime = Instant.ofEpochMilli(interval.start.timestamp),
+                startZoneOffset = ZoneOffset.ofTotalSeconds(interval.start.offsetSeconds),
+                endTime = Instant.ofEpochMilli(interval.end.timestamp),
+                endZoneOffset = ZoneOffset.ofTotalSeconds(interval.end.offsetSeconds),
+                distance = interval.meters.meters,
+                metadata = metadata(
+                    if (index == 0) "radrower:${workout.id}:distance"
+                    else "radrower:${workout.id}:distance:$index",
+                    clientRecordVersion = DISTANCE_RECORD_VERSION,
+                ),
             )
         }
         workout.caloriesKcal.takeIf { it.isPositiveFinite() }?.let { caloriesKcal ->
@@ -139,95 +133,7 @@ internal object HealthConnectExport {
                 metadata = metadata("radrower:${workout.id}:power"),
             )
         }
-        val speedSamples = activeMetricSamples(workout, samples) { it.speedKmh }.map { (timestampEpochMs, speedKmh) ->
-            SpeedRecord.Sample(Instant.ofEpochMilli(timestampEpochMs), (speedKmh / 3.6).metersPerSecond)
-        }
-        if (speedSamples.isNotEmpty()) {
-            records += SpeedRecord(
-                startTime = start,
-                startZoneOffset = startOffset,
-                endTime = end,
-                endZoneOffset = endOffset,
-                samples = speedSamples,
-                metadata = metadata("radrower:${workout.id}:speed"),
-            )
-        }
         return records
-    }
-
-    private fun workoutLaps(
-        workout: Workout,
-        samples: List<WorkoutSample>,
-        segments: List<Segment>,
-    ): List<ExerciseLap> {
-        val total = workout.distanceM?.takeIf { it.isPositiveFinite() } ?: return emptyList()
-        val endMs = requireNotNull(workout.endedAtEpochMs)
-        val pauses = segments.filter { it.type == "pause" }.sortedBy { it.startedAtEpochMs }
-        val readings = samples.asSequence()
-            .filter { it.workoutId == workout.id && it.timestampEpochMs in workout.startedAtEpochMs..endMs }
-            .filter { it.distanceM != null && it.distanceM.isFinite() && it.distanceM >= 0 && it.distanceM <= total }
-            .sortedWith(compareBy<WorkoutSample> { it.timestampEpochMs }.thenBy { it.sequence })
-
-        var previousMs = workout.startedAtEpochMs
-        var previousDistance = 0.0
-        var nextBoundary = LAP_DISTANCE_M
-        var lapStart = Instant.ofEpochMilli(workout.startedAtEpochMs)
-        val laps = mutableListOf<ExerciseLap>()
-        for (sample in readings) {
-            val distance = requireNotNull(sample.distanceM)
-            if (distance < previousDistance) continue
-            if (distance == previousDistance) {
-                previousMs = sample.timestampEpochMs
-                continue
-            }
-            while (nextBoundary <= distance) {
-                val fraction = (nextBoundary - previousDistance) / (distance - previousDistance)
-                val crossing = interpolateActiveTime(previousMs, sample.timestampEpochMs, fraction, pauses)
-                    ?: return emptyList()
-                if (!crossing.isAfter(lapStart)) return emptyList()
-                laps += ExerciseLap(lapStart, crossing, LAP_DISTANCE_M.meters)
-                lapStart = crossing
-                nextBoundary += LAP_DISTANCE_M
-            }
-            previousMs = sample.timestampEpochMs
-            previousDistance = distance
-        }
-        if (nextBoundary <= total) return emptyList()
-        val remaining = total - (nextBoundary - LAP_DISTANCE_M)
-        if (remaining > 0) {
-            val end = Instant.ofEpochMilli(endMs)
-            if (!end.isAfter(lapStart)) return emptyList()
-            laps += ExerciseLap(lapStart, end, remaining.meters)
-        }
-        return laps
-    }
-
-    private fun interpolateActiveTime(
-        startMs: Long,
-        endMs: Long,
-        fraction: Double,
-        pauses: List<Segment>,
-    ): Instant? {
-        val intervals = mutableListOf<Pair<Long, Long>>()
-        var cursor = startMs
-        for (pause in pauses) {
-            val pauseStart = pause.startedAtEpochMs.coerceIn(startMs, endMs)
-            val pauseEnd = requireNotNull(pause.endedAtEpochMs).coerceIn(startMs, endMs)
-            if (pauseStart > cursor) intervals += cursor to pauseStart
-            cursor = maxOf(cursor, pauseEnd)
-        }
-        if (cursor < endMs) intervals += cursor to endMs
-        val activeMs = intervals.sumOf { (start, end) -> end - start }
-        if (activeMs <= 0) return null
-        var remainingMs = activeMs.toDouble() * fraction
-        for ((start, end) in intervals) {
-            val durationMs = end - start
-            if (remainingMs <= durationMs) {
-                return Instant.ofEpochMilli(start).plusNanos((remainingMs * 1_000_000).roundToLong())
-            }
-            remainingMs -= durationMs
-        }
-        return Instant.ofEpochMilli(endMs)
     }
 
     suspend fun export(
@@ -235,7 +141,7 @@ internal object HealthConnectExport {
         workout: Workout,
         samples: List<WorkoutSample> = emptyList(),
         segments: List<Segment> = emptyList(),
-    ): ExportResult {
+    ) {
         val requiredPermissions = permissionsFor(workout, samples)
         val grantedPermissions = client.permissionController.getGrantedPermissions()
         check(grantedPermissions.containsAll(requiredPermissions)) {
@@ -244,10 +150,64 @@ internal object HealthConnectExport {
         val records = records(workout, samples, segments)
         // Retries are idempotent thanks to stable client record IDs, so chunking is safe.
         records.chunked(MAX_RECORDS_PER_INSERT).forEach { client.insertRecords(it) }
-        return ExportResult(
-            lapsUnavailable = workout.distanceM.isPositiveFinite() &&
-                records.filterIsInstance<ExerciseSessionRecord>().single().laps.isEmpty(),
-        )
+    }
+
+    private data class DistancePoint(val timestamp: Long, val offsetSeconds: Int, val meters: Double)
+
+    private data class DistanceInterval(val start: DistancePoint, val end: DistancePoint, val meters: Double)
+
+    private fun distanceIntervals(workout: Workout, samples: List<WorkoutSample>): List<DistanceInterval> {
+        val endAt = workout.endedAtEpochMs ?: return emptyList()
+        var sessionState: Int? = null
+        val stretches = mutableListOf<MutableList<DistancePoint>>()
+        var current: MutableList<DistancePoint>? = null
+        for (sample in samples.sortedBy { it.sequence }) {
+            sessionState = sample.sessionState
+            if (sessionState != SessionState.IN_PROGRESS.code) current = null
+            if (sessionState != SessionState.IN_PROGRESS.code ||
+                sample.workoutId != workout.id ||
+                sample.timestampEpochMs !in workout.startedAtEpochMs..endAt
+            ) continue
+            val distance = sample.distanceM?.takeIf { it.isFinite() && it >= 0 } ?: continue
+            val points = current ?: mutableListOf<DistancePoint>().also {
+                stretches += it
+                current = it
+            }
+            val last = points.lastOrNull()
+            if (last == null || (distance >= last.meters && sample.timestampEpochMs > last.timestamp)) {
+                points += DistancePoint(sample.timestampEpochMs, sample.offsetS, distance)
+            }
+        }
+        return stretches.flatMap(::windows)
+    }
+
+    // Interpolate irregular rower updates at fixed boundaries to make each record represent one second.
+    private fun windows(points: List<DistancePoint>): List<DistanceInterval> {
+        val first = points.firstOrNull() ?: return emptyList()
+        val lastTimestamp = points.last().timestamp
+        val intervals = mutableListOf<DistanceInterval>()
+        var start = first.timestamp
+        while (start < lastTimestamp) {
+            val end = minOf(start + DISTANCE_WINDOW_MILLIS, lastTimestamp)
+            val startPoint = DistancePoint(start, points.offsetAt(start), points.metersAt(start))
+            val endPoint = DistancePoint(end, points.offsetAt(end), points.metersAt(end))
+            val meters = endPoint.meters - startPoint.meters
+            if (meters > 0) intervals += DistanceInterval(startPoint, endPoint, meters)
+            start = end
+        }
+        return intervals
+    }
+
+    private fun List<DistancePoint>.offsetAt(timestamp: Long): Int =
+        lastOrNull { it.timestamp <= timestamp }?.offsetSeconds ?: first().offsetSeconds
+
+    private fun List<DistancePoint>.metersAt(timestamp: Long): Double {
+        val after = indexOfFirst { it.timestamp >= timestamp }
+        if (after <= 0) return first().meters
+        val before = this[after - 1]
+        val next = this[after]
+        return before.meters + (next.meters - before.meters) *
+            (timestamp - before.timestamp) / (next.timestamp - before.timestamp)
     }
 
     private fun activeMetricSamples(

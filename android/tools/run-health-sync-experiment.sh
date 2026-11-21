@@ -86,7 +86,6 @@ echo "Installing on $serial (Android API $api_level)..."
 permissions=(
     android.permission.health.WRITE_EXERCISE
     android.permission.health.WRITE_POWER
-    android.permission.health.WRITE_SPEED
     android.permission.health.WRITE_DISTANCE
     android.permission.health.WRITE_EXERCISE_ROUTE
 )
@@ -99,13 +98,13 @@ else
     cat <<'EOF'
 On Android 13 and earlier, Health Connect permissions must be granted in its UI.
 On the phone, open Health Connect > App permissions > Radrower and allow:
-Exercise, Distance, Power, Speed, and Exercise route.
+Exercise, Distance, Power, and Exercise route.
 EOF
     if [[ ! -t 0 ]]; then
         echo "Run this script from a terminal after granting those permissions." >&2
         exit 1
     fi
-    read -r -p "Press Enter after granting all five permissions... "
+    read -r -p "Press Enter after granting all four permissions... "
 fi
 
 echo "Running HealthSyncExperimentTest on $serial..."
