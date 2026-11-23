@@ -116,7 +116,7 @@ class MainActivity : ComponentActivity() {
         }
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                app.exportEvents.collect { Toast.makeText(this@MainActivity, it, Toast.LENGTH_LONG).show() }
+                app.toastEvents.collect { Toast.makeText(this@MainActivity, it, Toast.LENGTH_LONG).show() }
             }
         }
         setContent {

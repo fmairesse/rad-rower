@@ -60,6 +60,9 @@ The history shows export status; pending exports are retried and are queued
 again when the app opens. Permissions still require foreground user interaction.
 See `WorkoutPersistenceTest.kt`, `HealthConnectExportTest.kt`, and
 `android/README.md`; real-workout and device behavior remain to be verified.
+On completion, a workout with a rower-reported active duration below 60 seconds
+is deleted with its samples and segments instead of being exported; a toast
+reports the deletion. Unknown durations and interrupted workouts are retained.
 
 Android workouts now persist rowing and pause segments at observed session-state
 transitions, closing them on completion, disconnection or recovery. Completed

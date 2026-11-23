@@ -30,12 +30,12 @@ class WorkoutExportWorker(context: Context, params: WorkerParameters) : Coroutin
                 val client = HealthConnectClient.getOrCreate(applicationContext)
                 HealthConnectExport.export(client, workout, samples, segments)
             }
-            if (exported) app.exportEvents.tryEmit("Workout exported to Health Connect.")
+            if (exported) app.toastEvents.tryEmit("Workout exported to Health Connect.")
             return Result.success()
         } catch (error: Exception) {
             if (error is CancellationException) throw error
             Log.e(TAG, "Workout export failed; it will be retried", error)
-            app.exportEvents.tryEmit("Workout export pending. Check Health Connect availability and permissions.")
+            app.toastEvents.tryEmit("Workout export pending. Check Health Connect availability and permissions.")
             return Result.retry()
         }
     }

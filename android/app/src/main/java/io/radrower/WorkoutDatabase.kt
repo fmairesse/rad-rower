@@ -118,6 +118,9 @@ internal abstract class WorkoutDao {
     @Query("SELECT * FROM workouts WHERE id = :id")
     abstract suspend fun workout(id: String): Workout?
 
+    @Query("DELETE FROM workouts WHERE id = :id")
+    abstract suspend fun deleteWorkout(id: String): Int
+
     @Query("""
         SELECT * FROM workouts WHERE exported = 0 AND status = 'completed' AND partial = 0
         AND endedAtEpochMs > startedAtEpochMs

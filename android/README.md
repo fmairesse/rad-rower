@@ -49,6 +49,11 @@ history** on the dashboard to see all workouts, newest first, with their start
 date and time, duration, distance and calories. Duration is the elapsed time
 reported by the rower; unavailable values are shown as a dash. Recording,
 interrupted and partial workouts remain visible with their status.
+When a workout completes with a rower-reported active duration below one
+minute, it and its samples and segments are deleted rather than exported,
+and a toast says **Short workout not saved**. Exactly one minute is retained.
+If the duration is unavailable, the workout is retained. Interrupted workouts
+are not deleted by this rule.
 Average speed and pace are calculated from the rower's cumulative distance and
 active elapsed time for complete workouts when both measurements are available.
 Each workout also stores contiguous rowing and pause segments based on the

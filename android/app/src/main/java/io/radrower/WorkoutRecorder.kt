@@ -18,6 +18,7 @@ internal class WorkoutRecorder(
     scope: CoroutineScope,
     private val clock: () -> Long = System::currentTimeMillis,
     private val monotonicClock: () -> Long = SystemClock::elapsedRealtime,
+    private val onShortWorkout: () -> Unit = {},
     private val onCompleted: suspend (Workout) -> Unit = {},
 ) {
     private sealed interface Event {
@@ -143,6 +144,15 @@ internal class WorkoutRecorder(
         val resistanceLevel = (event.values["resistanceLevel"] as? Number)?.toInt()
         require(resistanceLevel != null && resistanceLevel in 1..24) {
             "Bluetooth telemetry must provide a numeric resistance level."
+        }
+        if (finished && elapsedS != null && elapsedS < 60) {
+            check(dao.deleteWorkout(workout.id) == 1) { "Short workout could not be deleted." }
+            current = null
+            currentSegment = null
+            rowerState = null
+            lastMonotonicMs = null
+            onShortWorkout()
+            return
         }
         val next =
             workout.copy(

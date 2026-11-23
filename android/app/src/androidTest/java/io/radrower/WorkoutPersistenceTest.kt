@@ -5,6 +5,7 @@ import android.database.sqlite.SQLiteDatabase
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -64,7 +65,7 @@ class WorkoutPersistenceTest {
         )
         recorder.recordMetrics("sessionState" to 3, "distanceM" to 100, "caloriesKcal" to 10)
         recorder.recordMetrics("powerW" to null)
-        recorder.recordMetrics("sessionState" to 2, "elapsedS" to 20)
+        recorder.recordMetrics("sessionState" to 2, "elapsedS" to 60)
         recorder.recordMetrics("sessionState" to 4, "distanceM" to 0, "caloriesKcal" to 0)
         recorder.recordMetrics("sessionState" to 1)
         waitUntil { dao.workouts().singleOrNull()?.status == "completed" }
@@ -179,6 +180,92 @@ class WorkoutPersistenceTest {
         val workout = withTimeout(10_000.milliseconds) { scheduled.await() }
         assertFalse(workout.exported)
         assertEquals(listOf(workout.id), dao.pendingExports().map { it.id })
+    }
+
+    @Test fun shortWorkoutIsDeletedWithSamplesAndSegmentsWithoutSchedulingExport() = runBlocking {
+        val dao = database.workouts()
+        val discarded = CompletableDeferred<Unit>()
+        var scheduled = false
+        var now = 1_000L
+        val recorder = WorkoutRecorder(
+            dao, scope, clock = { now }, monotonicClock = { now },
+            onShortWorkout = { discarded.complete(Unit) },
+            onCompleted = { scheduled = true },
+        )
+        recorder.recordMetrics("sessionState" to 1)
+        now += 1_000
+        recorder.recordMetrics("sessionState" to 2, "elapsedS" to 0)
+        waitUntil { dao.workouts().isNotEmpty() }
+        val id = dao.workouts().single().id
+        now += 1_000
+        recorder.recordMetrics("sessionState" to 3, "elapsedS" to 59)
+        now += 1_000
+        recorder.recordMetrics("sessionState" to 4, "elapsedS" to 0)
+        withTimeout(10_000.milliseconds) { discarded.await() }
+
+        assertNull(dao.workout(id))
+        assertTrue(dao.samples(id).isEmpty())
+        assertTrue(dao.segments(id).isEmpty())
+        assertTrue(dao.pendingExports().isEmpty())
+        assertFalse(scheduled)
+    }
+
+    @Test fun oneMinuteAndUnknownDurationsAreSavedNormally() = runBlocking {
+        val dao = database.workouts()
+        val saved = kotlinx.coroutines.channels.Channel<Workout>(2)
+        var discarded = false
+        var now = 1_000L
+        val recorder = WorkoutRecorder(
+            dao, scope, clock = { now }, monotonicClock = { now },
+            onShortWorkout = { discarded = true },
+            onCompleted = { saved.send(it) },
+        )
+        recorder.recordMetrics("sessionState" to 1)
+        now += 1_000
+        recorder.recordMetrics("sessionState" to 2, "elapsedS" to 0)
+        now += 1_000
+        recorder.recordMetrics("sessionState" to 4, "elapsedS" to 60)
+        val minute = withTimeout(10_000.milliseconds) { saved.receive() }
+        now += 1_000
+        recorder.recordMetrics("sessionState" to 1)
+        now += 1_000
+        recorder.recordMetrics("sessionState" to 2)
+        now += 1_000
+        recorder.recordMetrics("sessionState" to 4)
+        val unknown = withTimeout(10_000.milliseconds) { saved.receive() }
+
+        assertEquals(60.0, minute.elapsedS!!, 0.0)
+        assertNull(unknown.elapsedS)
+        assertEquals(setOf(minute.id, unknown.id), dao.pendingExports().map { it.id }.toSet())
+        assertFalse(discarded)
+    }
+
+    @Test fun failedShortWorkoutDeletionIsReportedWithoutToastOrExport() = runBlocking {
+        val dao = database.workouts()
+        var discarded = false
+        var scheduled = false
+        var now = 1_000L
+        val recorder = WorkoutRecorder(
+            dao, scope, clock = { now }, monotonicClock = { now },
+            onShortWorkout = { discarded = true },
+            onCompleted = { scheduled = true },
+        )
+        recorder.recordMetrics("sessionState" to 1)
+        now += 1_000
+        recorder.recordMetrics("sessionState" to 2, "elapsedS" to 0)
+        waitUntil { dao.workouts().isNotEmpty() }
+        database.openHelper.writableDatabase.execSQL(
+            "CREATE TRIGGER reject_short_delete BEFORE DELETE ON workouts " +
+                "BEGIN SELECT RAISE(ABORT, 'delete failed'); END",
+        )
+        now += 1_000
+        recorder.recordMetrics("sessionState" to 4, "elapsedS" to 10)
+        val message = withTimeout(10_000.milliseconds) { recorder.error.first { it != null } }
+
+        assertTrue(requireNotNull(message).contains("Workout storage failed"))
+        assertEquals("recording", dao.workouts().single().status)
+        assertFalse(discarded)
+        assertFalse(scheduled)
     }
 
     @Test fun schedulingFailureDoesNotLoseCompletedWorkout() = runBlocking {
@@ -350,6 +437,7 @@ class WorkoutPersistenceTest {
             override fun observeWorkouts() = dao.observeWorkouts()
             override suspend fun workouts() = dao.workouts()
             override suspend fun workout(id: String) = dao.workout(id)
+            override suspend fun deleteWorkout(id: String) = dao.deleteWorkout(id)
             override suspend fun pendingExports() = dao.pendingExports()
             override suspend fun markExported(id: String) = dao.markExported(id)
             override suspend fun samples(id: String) = dao.samples(id)

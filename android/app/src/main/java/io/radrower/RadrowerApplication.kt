@@ -8,10 +8,15 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 
 internal class RadrowerApplication : Application() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    val exportEvents = MutableSharedFlow<String>(extraBufferCapacity = 8)
+    val toastEvents = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val database by lazy { WorkoutDatabase.create(this) }
     val recorder by lazy {
-        WorkoutRecorder(database.workouts(), scope, onCompleted = { enqueuePendingExports() })
+        WorkoutRecorder(
+            database.workouts(),
+            scope,
+            onShortWorkout = { toastEvents.tryEmit("Short workout not saved") },
+            onCompleted = { enqueuePendingExports() },
+        )
     }
 
     suspend fun enqueuePendingExports() {
