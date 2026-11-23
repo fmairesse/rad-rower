@@ -55,9 +55,12 @@ def regenerate_ids(db_path):
         # Rewrite the parent and child keys together; the foreign key is checked afterwards.
         conn.execute("PRAGMA foreign_keys=OFF")
         changes = []
+        has_exported = any(row[1] == "exported" for row in conn.execute("PRAGMA table_info(workouts)"))
         for (old,) in conn.execute("SELECT id FROM workouts").fetchall():
             new = str(uuid.uuid4())
             conn.execute("UPDATE workouts SET id = ? WHERE id = ?", (new, old))
+            if has_exported:
+                conn.execute("UPDATE workouts SET exported = 0 WHERE id = ?", (new,))
             conn.execute("UPDATE samples SET workoutId = ? WHERE workoutId = ?", (new, old))
             conn.execute("UPDATE segments SET workoutId = ? WHERE workoutId = ?", (new, old))
             changes.append((old, new))

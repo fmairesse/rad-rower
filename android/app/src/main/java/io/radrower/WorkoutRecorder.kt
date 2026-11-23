@@ -18,6 +18,7 @@ internal class WorkoutRecorder(
     scope: CoroutineScope,
     private val clock: () -> Long = System::currentTimeMillis,
     private val monotonicClock: () -> Long = SystemClock::elapsedRealtime,
+    private val onCompleted: suspend (Workout) -> Unit = {},
 ) {
     private sealed interface Event {
         data class Metrics(
@@ -217,6 +218,15 @@ internal class WorkoutRecorder(
         currentSegment = nextSegment
         rowerState = if (finished) null else state ?: rowerState
         lastMonotonicMs = if (finished) null else event.monotonicMs
+        if (finished) {
+            try {
+                onCompleted(next)
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                mutableError.value = "Workout saved, but export could not be scheduled. Reopen the app to retry: " +
+                    (error.message ?: "scheduling error")
+            }
+        }
     }
 
     private suspend fun interrupt(event: Event.Disconnect) {

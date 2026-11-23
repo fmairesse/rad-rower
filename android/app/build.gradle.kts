@@ -35,6 +35,7 @@ android {
     buildFeatures {
         compose = true
     }
+    sourceSets.getByName("androidTest").assets.directories.add("$projectDir/schemas")
 }
 
 ksp {
@@ -53,6 +54,7 @@ dependencies {
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     implementation(libs.androidx.health.connect.client)
+    implementation(libs.androidx.work.runtime)
     ksp(libs.androidx.room.compiler)
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))

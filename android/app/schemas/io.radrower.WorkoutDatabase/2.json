@@ -1,0 +1,327 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 2,
+    "identityHash": "dc800359df93daaedc9cbeed1b189cf5",
+    "entities": [
+      {
+        "tableName": "workouts",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `startedAtEpochMs` INTEGER NOT NULL, `startedOffsetS` INTEGER NOT NULL, `endedAtEpochMs` INTEGER, `endedOffsetS` INTEGER, `lastSampleAtEpochMs` INTEGER NOT NULL, `lastSampleOffsetS` INTEGER NOT NULL, `status` TEXT NOT NULL, `partial` INTEGER NOT NULL, `sampleCount` INTEGER NOT NULL, `activeMs` INTEGER NOT NULL, `distanceM` REAL, `caloriesKcal` REAL, `strokesCount` REAL, `elapsedS` REAL, `cadenceTotalSpm` REAL NOT NULL, `cadenceSampleCount` INTEGER NOT NULL, `averageCadenceSpm` REAL, `averageSpeedKmh` REAL, `averagePaceSPer500M` REAL, `exported` INTEGER NOT NULL DEFAULT 1, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startedAtEpochMs",
+            "columnName": "startedAtEpochMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startedOffsetS",
+            "columnName": "startedOffsetS",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endedAtEpochMs",
+            "columnName": "endedAtEpochMs",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "endedOffsetS",
+            "columnName": "endedOffsetS",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "lastSampleAtEpochMs",
+            "columnName": "lastSampleAtEpochMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastSampleOffsetS",
+            "columnName": "lastSampleOffsetS",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "partial",
+            "columnName": "partial",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sampleCount",
+            "columnName": "sampleCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "activeMs",
+            "columnName": "activeMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "distanceM",
+            "columnName": "distanceM",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "caloriesKcal",
+            "columnName": "caloriesKcal",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "strokesCount",
+            "columnName": "strokesCount",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "elapsedS",
+            "columnName": "elapsedS",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "cadenceTotalSpm",
+            "columnName": "cadenceTotalSpm",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cadenceSampleCount",
+            "columnName": "cadenceSampleCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "averageCadenceSpm",
+            "columnName": "averageCadenceSpm",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "averageSpeedKmh",
+            "columnName": "averageSpeedKmh",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "averagePaceSPer500M",
+            "columnName": "averagePaceSPer500M",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "exported",
+            "columnName": "exported",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "1"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "samples",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`workoutId` TEXT NOT NULL, `sequence` INTEGER NOT NULL, `timestampEpochMs` INTEGER NOT NULL, `offsetS` INTEGER NOT NULL, `sessionState` INTEGER NOT NULL, `powerW` REAL, `distanceM` REAL, `resistanceLevel` INTEGER NOT NULL, `elapsedS` REAL, `caloriesKcal` REAL, `strokesCount` REAL, `cadenceSpm` REAL, `paceSPer500M` REAL, `speedKmh` REAL, `unvalidatedMetricsJson` TEXT, PRIMARY KEY(`workoutId`, `sequence`), FOREIGN KEY(`workoutId`) REFERENCES `workouts`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "workoutId",
+            "columnName": "workoutId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sequence",
+            "columnName": "sequence",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timestampEpochMs",
+            "columnName": "timestampEpochMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "offsetS",
+            "columnName": "offsetS",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sessionState",
+            "columnName": "sessionState",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "powerW",
+            "columnName": "powerW",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "distanceM",
+            "columnName": "distanceM",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "resistanceLevel",
+            "columnName": "resistanceLevel",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "elapsedS",
+            "columnName": "elapsedS",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "caloriesKcal",
+            "columnName": "caloriesKcal",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "strokesCount",
+            "columnName": "strokesCount",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "cadenceSpm",
+            "columnName": "cadenceSpm",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "paceSPer500M",
+            "columnName": "paceSPer500M",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "speedKmh",
+            "columnName": "speedKmh",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "unvalidatedMetricsJson",
+            "columnName": "unvalidatedMetricsJson",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "workoutId",
+            "sequence"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_samples_workoutId",
+            "unique": false,
+            "columnNames": [
+              "workoutId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_samples_workoutId` ON `${TABLE_NAME}` (`workoutId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "workouts",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "workoutId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "segments",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`workoutId` TEXT NOT NULL, `sequence` INTEGER NOT NULL, `type` TEXT NOT NULL, `startedAtEpochMs` INTEGER NOT NULL, `endedAtEpochMs` INTEGER, PRIMARY KEY(`workoutId`, `sequence`), FOREIGN KEY(`workoutId`) REFERENCES `workouts`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "workoutId",
+            "columnName": "workoutId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sequence",
+            "columnName": "sequence",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startedAtEpochMs",
+            "columnName": "startedAtEpochMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endedAtEpochMs",
+            "columnName": "endedAtEpochMs",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "workoutId",
+            "sequence"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_segments_workoutId",
+            "unique": false,
+            "columnNames": [
+              "workoutId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_segments_workoutId` ON `${TABLE_NAME}` (`workoutId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "workouts",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "workoutId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'dc800359df93daaedc9cbeed1b189cf5')"
+    ]
+  }
+}

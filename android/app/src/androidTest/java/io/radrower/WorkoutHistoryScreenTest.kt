@@ -3,18 +3,15 @@ package io.radrower
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.test.platform.app.InstrumentationRegistry
-import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import java.text.DateFormat
@@ -63,10 +60,6 @@ class WorkoutHistoryScreenTest {
                 .getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
                 .format(Date(1_700_000_000_000))
         compose.onNodeWithText(date).assertExists()
-        compose.onNodeWithText(
-            "Before re-exporting an older workout, remove its old Radrower data in Health Connect " +
-                "to avoid duplicate distance records.",
-        ).assertIsDisplayed()
         compose.onNodeWithText("Duration: 1:02:03").assertIsDisplayed()
         compose.onNodeWithText("Distance: ${formatMetric("distanceM", 1234.0)} m").assertIsDisplayed()
         compose.onNodeWithText("Calories: 42 kcal").assertIsDisplayed()
@@ -87,24 +80,22 @@ class WorkoutHistoryScreenTest {
         compose.onNodeWithText(oldest).assertIsDisplayed()
     }
 
-    @Test fun exportsOnlyEligibleWorkoutsWhenRequested() {
-        var exported: Workout? = null
+    @Test fun showsExportStatusWithoutExportButton() {
         compose.setContent {
             WorkoutHistoryScreen(
                 listOf(
                     workout("complete"),
+                    workout("exported").copy(exported = true),
                     workout("partial").copy(partial = true),
-                    workout("interrupted").copy(status = "interrupted"),
                 ),
                 null,
                 {},
-                onExport = { exported = it },
             )
         }
-
-        compose.onNodeWithText("Export to Health Connect").performClick()
-        compose.runOnIdle { assertEquals("complete", exported?.id) }
-        compose.onAllNodesWithText("Export to Health Connect").assertCountEquals(1)
+        compose.onNodeWithText("Health Connect: pending export").assertIsDisplayed()
+        compose.onNodeWithText("Health Connect: exported").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Health Connect: not eligible").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Export to Health Connect").assertDoesNotExist()
     }
 
     @Test fun emptyAndErrorStatesAreDistinct() {

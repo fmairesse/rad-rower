@@ -1,6 +1,7 @@
 package io.radrower
 
 import androidx.room.Room
+import android.database.sqlite.SQLiteDatabase
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.CoroutineScope
@@ -98,6 +99,103 @@ class WorkoutPersistenceTest {
         assertEquals(workout, database.workouts().workouts().single())
         assertEquals(samples, database.workouts().samples(workout.id))
         assertEquals(segments, database.workouts().segments(workout.id))
+    }
+
+    @Test fun migratesExistingWorkoutsAsExported() = runBlocking {
+        database.close()
+        context.deleteDatabase(name)
+        val schema = JSONObject(
+            InstrumentationRegistry.getInstrumentation().context.assets
+                .open("io.radrower.WorkoutDatabase/1.json").bufferedReader().use { it.readText() },
+        ).getJSONObject("database")
+        val raw = SQLiteDatabase.openOrCreateDatabase(context.getDatabasePath(name), null)
+        val entities = schema.getJSONArray("entities")
+        for (i in 0 until entities.length()) {
+            val entity = entities.getJSONObject(i)
+            val table = entity.getString("tableName")
+            raw.execSQL(entity.getString("createSql").replace("\${TABLE_NAME}", table))
+            val indices = entity.optJSONArray("indices")
+            for (j in 0 until (indices?.length() ?: 0)) {
+                raw.execSQL(indices!!.getJSONObject(j).getString("createSql").replace("\${TABLE_NAME}", table))
+            }
+        }
+        val setup = schema.getJSONArray("setupQueries")
+        for (i in 0 until setup.length()) raw.execSQL(setup.getString(i))
+        raw.execSQL(
+            """INSERT INTO workouts (id, startedAtEpochMs, startedOffsetS, lastSampleAtEpochMs,
+                lastSampleOffsetS, status, partial, sampleCount, activeMs, cadenceTotalSpm, cadenceSampleCount)
+                VALUES ('old', 100, 0, 200, 0, 'completed', 0, 0, 0, 0, 0)""",
+        )
+        raw.version = 1
+        raw.close()
+        database = Room.databaseBuilder(context, WorkoutDatabase::class.java, name)
+            .addMigrations(WorkoutDatabase.MIGRATION_1_2).build()
+        assertTrue(database.workouts().workout("old")!!.exported)
+        assertTrue(database.workouts().pendingExports().isEmpty())
+    }
+
+    @Test fun exportsOnlyPendingEligibleWorkoutsAndMarksOnlyAfterSuccess() = runBlocking {
+        val dao = database.workouts()
+        val completed = Workout(
+            "pending", 100, 0, endedAtEpochMs = 200, lastSampleAtEpochMs = 200,
+            lastSampleOffsetS = 0, status = "completed", partial = false,
+        )
+        dao.upsertWorkout(completed)
+        dao.upsertWorkout(completed.copy(id = "exported", exported = true))
+        dao.upsertWorkout(completed.copy(id = "partial", partial = true))
+        dao.upsertWorkout(completed.copy(id = "interrupted", status = "interrupted"))
+        dao.upsertWorkout(completed.copy(id = "invalid", endedAtEpochMs = 100))
+        assertEquals(listOf("pending"), dao.pendingExports().map { it.id })
+        try {
+            WorkoutExportWorker.exportPendingWorkout(dao, "pending") { _, _, _ -> error("write failed") }
+            fail("Expected export failure")
+        } catch (_: IllegalStateException) {
+            assertFalse(dao.workout("pending")!!.exported)
+        }
+        var writes = 0
+        assertTrue(WorkoutExportWorker.exportPendingWorkout(dao, "pending") { workout, _, _ ->
+            assertEquals("pending", workout.id)
+            writes++
+        })
+        assertTrue(dao.workout("pending")!!.exported)
+        assertFalse(WorkoutExportWorker.exportPendingWorkout(dao, "pending") { _, _, _ -> writes++ })
+        assertFalse(WorkoutExportWorker.exportPendingWorkout(dao, "partial") { _, _, _ -> writes++ })
+        assertEquals(1, writes)
+    }
+
+    @Test fun signalsCompletionAfterSaving() = runBlocking {
+        val dao = database.workouts()
+        var now = 1_000L
+        val scheduled = kotlinx.coroutines.CompletableDeferred<Workout>()
+        val recorder = WorkoutRecorder(dao, scope, clock = { now }, monotonicClock = { now }) {
+            assertEquals("completed", dao.workout(it.id)!!.status)
+            scheduled.complete(it)
+        }
+        recorder.recordMetrics("sessionState" to 1)
+        now += 1_000
+        recorder.recordMetrics("sessionState" to 2)
+        now += 1_000
+        recorder.recordMetrics("sessionState" to 4)
+        val workout = withTimeout(10_000.milliseconds) { scheduled.await() }
+        assertFalse(workout.exported)
+        assertEquals(listOf(workout.id), dao.pendingExports().map { it.id })
+    }
+
+    @Test fun schedulingFailureDoesNotLoseCompletedWorkout() = runBlocking {
+        val dao = database.workouts()
+        var now = 1_000L
+        val recorder = WorkoutRecorder(dao, scope, clock = { now }, monotonicClock = { now }) {
+            error("scheduler unavailable")
+        }
+        recorder.recordMetrics("sessionState" to 1)
+        now += 1_000
+        recorder.recordMetrics("sessionState" to 2)
+        now += 1_000
+        recorder.recordMetrics("sessionState" to 4)
+        val message = withTimeout(10_000.milliseconds) { recorder.error.first { it != null } }
+        assertTrue(requireNotNull(message).contains("Workout saved, but export could not be scheduled"))
+        assertEquals("completed", dao.workouts().single().status)
+        assertEquals(1, dao.pendingExports().size)
     }
 
     @Test fun calculatesAverageSpeedAndPaceFromRowerElapsedTime() = runBlocking {
@@ -251,6 +349,9 @@ class WorkoutPersistenceTest {
             override suspend fun upsertSegment(segment: Segment) = dao.upsertSegment(segment)
             override fun observeWorkouts() = dao.observeWorkouts()
             override suspend fun workouts() = dao.workouts()
+            override suspend fun workout(id: String) = dao.workout(id)
+            override suspend fun pendingExports() = dao.pendingExports()
+            override suspend fun markExported(id: String) = dao.markExported(id)
             override suspend fun samples(id: String) = dao.samples(id)
             override suspend fun segments(id: String) = dao.segments(id)
             override suspend fun closeRecoveredSegments() = dao.closeRecoveredSegments()

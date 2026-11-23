@@ -8,6 +8,7 @@ import android.os.SystemClock
 import android.provider.Settings
 import android.view.Window
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -48,8 +49,10 @@ import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import io.radrower.ui.theme.RadRowerTheme
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -67,16 +70,7 @@ class MainActivity : ComponentActivity() {
     private var permissionGranted by mutableStateOf(false)
     private var bluetoothEnabled by mutableStateOf(false)
 
-    private data class PendingHealthExport(
-        val workout: Workout,
-        val samples: List<WorkoutSample>,
-        val segments: List<Segment>,
-    )
-
-    private var pendingHealthExport: PendingHealthExport? = null
-    private var exportingWorkoutId by mutableStateOf<String?>(null)
     private var healthExportMessage by mutableStateOf<String?>(null)
-    private var healthExportMessageIsError by mutableStateOf(false)
 
     private val startupHealthPermissions: Set<String>
         get() = if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
@@ -96,19 +90,10 @@ class MainActivity : ComponentActivity() {
         registerForActivityResult(
             PermissionController.createRequestPermissionResultContract(),
         ) { grantedPermissions ->
-            val export = pendingHealthExport
-            pendingHealthExport = null
-            if (export != null) {
-                if (grantedPermissions.containsAll(HealthConnectExport.permissionsFor(export.workout, export.samples))) {
-                    writeWorkoutToHealthConnect(export.workout, export.samples, export.segments)
-                } else {
-                    exportingWorkoutId = null
-                    healthExportMessage = "Health Connect permission was not granted."
-                    healthExportMessageIsError = true
-                }
-            } else if (!grantedPermissions.containsAll(startupHealthPermissions)) {
-                healthExportMessage = "Some Health Connect permissions were not granted. Missing workout permissions can be requested when exporting."
-                healthExportMessageIsError = true
+            if (!grantedPermissions.containsAll(HealthConnectExport.allWritePermissions)) {
+                healthExportMessage = "Some Health Connect permissions were not granted. Reopen the app or change Health Connect permissions to enable exports."
+            } else {
+                healthExportMessage = null
             }
         }
     private val enableBluetooth =
@@ -128,6 +113,11 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         lifecycleScope.launch {
             keepScreenOnWhileActive(window, rower.state)
+        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                app.exportEvents.collect { Toast.makeText(this@MainActivity, it, Toast.LENGTH_LONG).show() }
+            }
         }
         setContent {
             val state by rower.state.collectAsState()
@@ -158,9 +148,6 @@ class MainActivity : ComponentActivity() {
                     workouts = workouts,
                     storageError = storageError ?: readError,
                     exportMessage = healthExportMessage,
-                    exportMessageIsError = healthExportMessageIsError,
-                    exportingWorkoutId = exportingWorkoutId,
-                    onExport = ::beginHealthConnectExport,
                 )
             }
         }
@@ -169,6 +156,18 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         foreground = true
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val app = application as RadrowerApplication
+                app.enqueuePendingExports()
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                android.util.Log.e("MainActivity", "Unable to schedule pending workout exports", error)
+                kotlinx.coroutines.withContext(Dispatchers.Main) {
+                    healthExportMessage = "Unable to schedule workout exports: ${error.message ?: "database error"}"
+                }
+            }
+        }
         refreshAvailability()
         if (permissionGranted && bluetoothEnabled) {
             rower.connect()
@@ -239,81 +238,10 @@ class MainActivity : ComponentActivity() {
                 if (error is CancellationException) throw error
                 startupHealthChecked = true
                 healthExportMessage = "Unable to access Health Connect: ${error.message ?: "request failed"}"
-                healthExportMessageIsError = true
             } finally {
                 checkingStartupHealth = false
             }
         }
-    }
-
-    private fun beginHealthConnectExport(workout: Workout) {
-        startupHealthChecked = true
-        if (!HealthConnectExport.isEligible(workout)) {
-            healthExportMessage = "Only completed, non-partial workouts can be exported."
-            healthExportMessageIsError = true
-            return
-        }
-        when (HealthConnectClient.getSdkStatus(this)) {
-            HealthConnectClient.SDK_UNAVAILABLE -> {
-                healthExportMessage = "Health Connect is not available on this device."
-                healthExportMessageIsError = true
-                return
-            }
-
-            HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED -> {
-                healthExportMessage = "Install or update Health Connect, then try again."
-                healthExportMessageIsError = true
-                return
-            }
-        }
-        exportingWorkoutId = workout.id
-        healthExportMessage = null
-        lifecycleScope.launch {
-            try {
-                val client = HealthConnectClient.getOrCreate(applicationContext)
-                val dao = (application as RadrowerApplication).database.workouts()
-                val samples = dao.samples(workout.id)
-                val segments = dao.segments(workout.id)
-                val export = PendingHealthExport(workout, samples, segments)
-                val neededPermissions = HealthConnectExport.permissionsFor(workout, samples)
-                if (client.permissionController.getGrantedPermissions().containsAll(neededPermissions)) {
-                    writeWorkoutToHealthConnect(workout, samples, segments, client)
-                } else {
-                    pendingHealthExport = export
-                    healthConnectPermissions.launch(neededPermissions)
-                }
-            } catch (error: Exception) {
-                if (error is CancellationException) throw error
-                finishHealthConnectExport("Unable to access Health Connect: ${error.message ?: "request failed"}", true)
-            }
-        }
-    }
-
-    private fun writeWorkoutToHealthConnect(
-        workout: Workout,
-        samples: List<WorkoutSample>,
-        segments: List<Segment>,
-        client: HealthConnectClient? = null,
-    ) {
-        lifecycleScope.launch {
-            try {
-                val healthConnectClient = client ?: HealthConnectClient.getOrCreate(applicationContext)
-                HealthConnectExport.export(healthConnectClient, workout, samples, segments)
-                finishHealthConnectExport("Workout exported to Health Connect.", false)
-            } catch (error: Exception) {
-                if (error is CancellationException) throw error
-                finishHealthConnectExport("Unable to export workout: ${error.message ?: "request failed"}", true)
-            }
-        }
-    }
-
-    private fun finishHealthConnectExport(
-        message: String,
-        isError: Boolean,
-    ) {
-        exportingWorkoutId = null
-        healthExportMessage = message
-        healthExportMessageIsError = isError
     }
 }
 

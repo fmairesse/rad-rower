@@ -1,6 +1,6 @@
 # Contexte du projet
 
-Dernière mise à jour : 2026-11-21.
+Dernière mise à jour : 2026-11-23.
 
 ## Objectif
 
@@ -41,17 +41,25 @@ resistance byte 0; fully unavailable telemetry and unknown nonzero encodings
 remain distinct. Linux experimentation tools continue to report raw values.
 The persistence and UI tests pass with simulated data on an Android 16
 emulator; the recording has not yet been tested on the real rower. Completed,
-non-partial workouts can now be exported on request to Health Connect as an
+non-partial workouts are exported to Health Connect as an
 indoor rowing session with active calories, one-second distance records
 interpolated from active counter readings, and timestamped power measurements
 while active. Exercise laps and speed records are not exported.
 At launch, the app requests Bluetooth permissions and, when Health Connect is
 available, all four Health Connect write permissions. Missing permissions can
-still be requested at export, and local recording remains independent. The
+requested again on reopening, and local recording remains independent. The
 startup permission flow has not yet been validated on a device.
 A previous production layout was inserted and removed synthetically on an
 emulator; the current layout and permission UX still need device validation.
 See `android/README.md` for operation and limitations.
+
+Android now queues completed, non-partial workouts with valid times for
+background Health Connect export using WorkManager. The version 1 to 2 Room
+migration marks all existing workouts exported without verifying remote data.
+The history shows export status; pending exports are retried and are queued
+again when the app opens. Permissions still require foreground user interaction.
+See `WorkoutPersistenceTest.kt`, `HealthConnectExportTest.kt`, and
+`android/README.md`; real-workout and device behavior remain to be verified.
 
 Android workouts now persist rowing and pause segments at observed session-state
 transitions, closing them on completion, disconnection or recovery. Completed

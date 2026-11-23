@@ -14,8 +14,8 @@ location services to be enabled. Bluetooth itself must also be enabled.
 At launch, the app requests the applicable Bluetooth permissions, followed by
 all four Health Connect write permissions when Health Connect is available.
 If Health Connect is unavailable, install or update it before exporting. A
-denied Health Connect permission can be requested again when exporting;
-local recording does not depend on it.
+denied Health Connect permission can be requested again when reopening the app,
+or changed in Health Connect settings; local recording does not depend on it.
 Debug builds declare permission to write exercise routes for the synthetic
 Health Connect experiment, although the current experiment does not write a
 route. Production exports do not contain routes.
@@ -58,9 +58,9 @@ disconnection, or at the last saved sample after an unexpected shutdown.
 Transition timestamps reflect when the app received the state, not the exact
 instant the rower changed state.
 
-The pre-release database schema was reset without migration when segments were
-added. Existing app databases must be cleared or the app reinstalled; this
-deletes locally saved workouts.
+The version 1 database is migrated without deleting workouts. Existing workouts
+are marked exported by the migration, even if they were never actually sent to
+Health Connect; they are not automatically exported.
 
 An active workout is marked **interrupted** when the connection is lost or the
 app leaves the foreground. After an unexpected process termination, unfinished
@@ -72,8 +72,10 @@ No measurements are inferred for missing intervals; a sudden shutdown may lose
 pending writes. Storage errors are displayed on the dashboard. Android's
 configured app backup behavior also applies to the database.
 
-Completed, non-partial workouts can be exported from **Workout history** to
-Health Connect. Export is always initiated by the user. Radrower writes an
+Completed, non-partial workouts with a valid time range are automatically
+queued for export to Health Connect after recording ends. **Workout history**
+shows whether each eligible workout is exported or pending; other workouts
+are not eligible. Radrower writes an
 indoor rowing exercise session, active calories when available,
 one-second distance records derived from the rower's cumulative counter, and a
 timestamped power record when measured samples are available. The session
@@ -88,10 +90,17 @@ may differ from the stored summary total. Speed records and exercise laps are
 not exported. Only active-session power samples are exported; pause, missing
 and invalid samples are omitted. Other raw telemetry is not exported.
 Radrower does not read Health Connect data.
-If a needed permission was not granted at launch, it is requested at export;
-export errors are shown in the
-history. Repeating an export uses stable client record IDs to avoid creating
-another copy of the same workout.
+WorkManager persists each export independently of the app's UI, so it can run
+after the app is closed and retry failures with increasing delays. Android
+controls the exact execution time; force-stopping the app prevents background
+execution until it is opened again. Pending eligible workouts are also queued
+when the app starts. If permissions are missing, install or update Health Connect
+and grant the required permissions; pending exports will be retried. A toast
+reports success or a pending export while the app is visible. Failures are
+logged, and the workout remains pending until all writes succeed. Stable client
+record IDs prevent duplicate records when a partially completed export is retried.
+Ordinary WorkManager tasks have a limited execution window; unusually long
+exports may be stopped and retried.
 
 Before re-exporting a workout exported with an older version, remove its old
 Radrower data in Health Connect. Old distance records are not removed
@@ -118,9 +127,10 @@ build and writes or updates the synthetic I1 records in Health Connect. On
 Android 14 and newer it grants the four permissions required by the test with
 `adb`; on older versions, grant them in the Health Connect app when prompted.
 
-To force a new export of existing workouts (for example to make Health Sync
-import them again), give them new IDs on a phone connected with `adb`. The
-script backs up the database first and needs a debug build:
+To force a new export of existing eligible workouts (for example to make Health
+Sync import them again), give them new IDs on a phone connected with `adb`.
+The script resets their export flags, backs up the database first and needs a
+debug build. Reopen the app afterwards to queue the exports:
 
 ```sh
 android/tools/regenerate-workout-ids.py --dry-run   # preview

@@ -8,7 +8,10 @@ import androidx.health.connect.client.records.PowerRecord
 import androidx.health.connect.client.records.SpeedRecord
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.work.WorkManager
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -190,6 +193,31 @@ class HealthConnectExportTest {
                 client.deleteRecords(ActiveCaloriesBurnedRecord::class, emptyList(), listOf("$prefix:active-calories"))
                 client.deleteRecords(PowerRecord::class, emptyList(), listOf("$prefix:power"))
             }
+        }
+    }
+
+    @Test
+    fun backgroundWorkerExportsAndPersistsStatusWhenRequested() = runBlocking {
+        assumeTrue(InstrumentationRegistry.getArguments().getString("runBackgroundExportIntegration") == "true")
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        check(HealthConnectClient.getSdkStatus(context) == HealthConnectClient.SDK_AVAILABLE)
+        val client = HealthConnectClient.getOrCreate(context)
+        val app = context.applicationContext as RadrowerApplication
+        val dao = app.database.workouts()
+        val workout = workout(distanceM = null, caloriesKcal = null).copy(id = "test-${UUID.randomUUID()}")
+        check(client.permissionController.getGrantedPermissions().containsAll(HealthConnectExport.permissionsFor(workout)))
+        dao.upsertWorkout(workout)
+        try {
+            WorkoutExportWorker.enqueue(context, workout.id)
+            withTimeout(60_000) {
+                while (dao.workout(workout.id)?.exported != true) delay(100)
+            }
+        } finally {
+            WorkManager.getInstance(context).cancelUniqueWork("workout-export:${workout.id}").result.get()
+            client.deleteRecords(
+                ExerciseSessionRecord::class, emptyList(), listOf("radrower:${workout.id}:exercise"),
+            )
+            app.database.openHelper.writableDatabase.execSQL("DELETE FROM workouts WHERE id = ?", arrayOf(workout.id))
         }
     }
 

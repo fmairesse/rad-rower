@@ -125,16 +125,15 @@ conversation. Si un choix change, indiquer quelle décision le remplace.
 - Date: 2026-11-16.
 - Status: implemented; the current one-second distance layout still needs
   validation with a real workout and downstream apps.
-- Decision: offer a user-triggered export from workout history for completed,
-  non-partial workouts only. Write an indoor rowing `ExerciseSessionRecord`
+- Decision: automatically queue an export after a completed, non-partial
+  workout with a valid time range. Write an indoor rowing `ExerciseSessionRecord`
   with rowing and pause segments, an active-calorie record when available,
   one-second distance records, and timestamped power samples. Do not write
   exercise laps or `SpeedRecord`s.
 - Reason: make the already-persisted local summary available to fitness apps
   without making Health Connect a prerequisite for recording.
 - Privacy and retries: request all four Health Connect write
-  permissions at app launch when available; request missing permissions needed
-  for a workout again at export. Never read Health Connect records. Use stable
+  permissions at app launch when available. Never read Health Connect records. Use stable
   client record IDs and versions so retrying the same immutable workout does
   not create a second copy. Distance readings are processed only during active
   stretches; counter decreases and pause readings are ignored.
@@ -144,6 +143,15 @@ conversation. Si un choix change, indiquer quelle décision le remplace.
   the record version is 7. The exercise session version is 4. Old records from
   earlier exports are not deleted automatically, so remove old Radrower data
   before re-exporting to avoid duplicate distance.
+- Background export (2026-11-23): WorkManager queues one unique task per
+  eligible workout, retries failures with backoff and continues independently
+  of the UI. Reopening the app also queues any pending eligible workouts.
+  Health Connect permissions cannot be requested in the background. The version
+  1 to 2 Room migration marks all existing workouts exported, regardless of
+  whether they were actually written to Health Connect. The flag is set for new
+  workouts only after every write succeeds. Android controls task timing, and a
+  force-stopped app cannot run the task until reopened. The UI shows export
+  status and displays a toast when an export finishes while it is visible.
 - Write limits: Health Connect guidance recommends at most 1000 records per
   write request, so `insertRecords` is called in chunks of 1000. The SDK
   (androidx.health.connect:connect-client 1.1.0) caps each power sample at

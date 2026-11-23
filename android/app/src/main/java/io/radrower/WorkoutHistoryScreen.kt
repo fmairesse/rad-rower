@@ -39,16 +39,13 @@ internal fun RadrowerScreens(
     workouts: List<Workout>?,
     storageError: String?,
     exportMessage: String? = null,
-    exportMessageIsError: Boolean = false,
-    exportingWorkoutId: String? = null,
-    onExport: (Workout) -> Unit = {},
 ) {
     var showHistory by rememberSaveable { mutableStateOf(false) }
     BackHandler(enabled = showHistory) { showHistory = false }
     if (showHistory) {
         WorkoutHistoryScreen(
             workouts, storageError, { showHistory = false },
-            exportMessage, exportMessageIsError, exportingWorkoutId, onExport,
+            exportMessage,
         )
     } else {
         RowerScreen(
@@ -65,9 +62,6 @@ internal fun WorkoutHistoryScreen(
     storageError: String?,
     onBack: () -> Unit,
     exportMessage: String? = null,
-    exportMessageIsError: Boolean = false,
-    exportingWorkoutId: String? = null,
-    onExport: (Workout) -> Unit = {},
 ) {
     Scaffold { padding ->
         LazyColumn(
@@ -79,18 +73,9 @@ internal fun WorkoutHistoryScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = onBack) { Text("Back to dashboard") }
                     Text("Workout history", style = MaterialTheme.typography.headlineMedium)
-                    Text(
-                        "Before re-exporting an older workout, remove its old Radrower data in Health Connect " +
-                            "to avoid duplicate distance records.",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
                     storageError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                     exportMessage?.let {
-                        Text(
-                            it,
-                            color = if (exportMessageIsError) MaterialTheme.colorScheme.error
-                            else MaterialTheme.colorScheme.primary,
-                        )
+                        Text(it, color = MaterialTheme.colorScheme.error)
                     }
                     when {
                         workouts == null && storageError == null -> Text("Loading workouts…")
@@ -100,7 +85,7 @@ internal fun WorkoutHistoryScreen(
             }
             if (workouts != null) {
                 items(workouts, key = { it.id }) { workout ->
-                    WorkoutHistoryItem(workout, exportingWorkoutId, onExport)
+                    WorkoutHistoryItem(workout)
                 }
             }
         }
@@ -108,11 +93,7 @@ internal fun WorkoutHistoryScreen(
 }
 
 @Composable
-private fun WorkoutHistoryItem(
-    workout: Workout,
-    exportingWorkoutId: String?,
-    onExport: (Workout) -> Unit,
-) {
+private fun WorkoutHistoryItem(workout: Workout) {
     val date = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
         .format(Date(workout.startedAtEpochMs))
     val status = when (workout.status) {
@@ -129,12 +110,9 @@ private fun WorkoutHistoryItem(
             Text("Distance: ${workout.distanceM?.let { "${formatMetric("distanceM", it)} m" } ?: "—"}")
             Text("Calories: ${workout.caloriesKcal?.let { "${formatMetric("caloriesKcal", it)} kcal" } ?: "—"}")
             if (HealthConnectExport.isEligible(workout)) {
-                OutlinedButton(
-                    onClick = { onExport(workout) },
-                    enabled = exportingWorkoutId == null,
-                ) {
-                    Text(if (exportingWorkoutId == workout.id) "Exporting…" else "Export to Health Connect")
-                }
+                Text(if (workout.exported) "Health Connect: exported" else "Health Connect: pending export")
+            } else {
+                Text("Health Connect: not eligible")
             }
         }
     }

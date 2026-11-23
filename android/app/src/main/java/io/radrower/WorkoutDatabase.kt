@@ -1,6 +1,7 @@
 package io.radrower
 
 import android.content.Context
+import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.Entity
@@ -13,6 +14,8 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.Transaction
 import androidx.room.Upsert
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
 @Entity(tableName = "workouts")
@@ -37,6 +40,7 @@ internal data class Workout(
     val averageCadenceSpm: Double? = null,
     val averageSpeedKmh: Double? = null,
     val averagePaceSPer500M: Double? = null,
+    @ColumnInfo(defaultValue = "1") val exported: Boolean = false,
 )
 
 @Entity(
@@ -111,6 +115,18 @@ internal abstract class WorkoutDao {
     @Query("SELECT * FROM workouts ORDER BY startedAtEpochMs DESC")
     abstract suspend fun workouts(): List<Workout>
 
+    @Query("SELECT * FROM workouts WHERE id = :id")
+    abstract suspend fun workout(id: String): Workout?
+
+    @Query("""
+        SELECT * FROM workouts WHERE exported = 0 AND status = 'completed' AND partial = 0
+        AND endedAtEpochMs > startedAtEpochMs
+    """)
+    abstract suspend fun pendingExports(): List<Workout>
+
+    @Query("UPDATE workouts SET exported = 1 WHERE id = :id")
+    abstract suspend fun markExported(id: String)
+
     @Query("SELECT * FROM samples WHERE workoutId = :id ORDER BY sequence")
     abstract suspend fun samples(id: String): List<WorkoutSample>
 
@@ -139,12 +155,20 @@ internal abstract class WorkoutDao {
     }
 }
 
-@Database(entities = [Workout::class, WorkoutSample::class, Segment::class], version = 1, exportSchema = true)
+@Database(entities = [Workout::class, WorkoutSample::class, Segment::class], version = 2, exportSchema = true)
 internal abstract class WorkoutDatabase : RoomDatabase() {
     abstract fun workouts(): WorkoutDao
 
     companion object {
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE workouts ADD COLUMN exported INTEGER NOT NULL DEFAULT 1")
+            }
+        }
+
         fun create(context: Context): WorkoutDatabase =
-            Room.databaseBuilder(context.applicationContext, WorkoutDatabase::class.java, "workouts.db").build()
+            Room.databaseBuilder(context.applicationContext, WorkoutDatabase::class.java, "workouts.db")
+                .addMigrations(MIGRATION_1_2)
+                .build()
     }
 }
