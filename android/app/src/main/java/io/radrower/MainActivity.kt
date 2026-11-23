@@ -90,10 +90,10 @@ class MainActivity : ComponentActivity() {
         registerForActivityResult(
             PermissionController.createRequestPermissionResultContract(),
         ) { grantedPermissions ->
-            if (!grantedPermissions.containsAll(HealthConnectExport.allWritePermissions)) {
-                healthExportMessage = "Some Health Connect permissions were not granted. Reopen the app or change Health Connect permissions to enable exports."
+            healthExportMessage = if (!grantedPermissions.containsAll(HealthConnectExport.allWritePermissions)) {
+                "Some Health Connect permissions were not granted. Reopen the app or change Health Connect permissions to enable exports."
             } else {
-                healthExportMessage = null
+                null
             }
         }
     private val enableBluetooth =

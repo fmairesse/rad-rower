@@ -158,24 +158,24 @@ internal object HealthConnectExport {
 
     private fun distanceIntervals(workout: Workout, samples: List<WorkoutSample>): List<DistanceInterval> {
         val endAt = workout.endedAtEpochMs ?: return emptyList()
-        var sessionState: Int? = null
+        var sessionState: Int?
         val stretches = mutableListOf<MutableList<DistancePoint>>()
         var current: MutableList<DistancePoint>? = null
-        for (sample in samples.sortedBy { it.sequence }) {
-            sessionState = sample.sessionState
+        for ((workoutId, _, timestampEpochMs, offsetS, sessionState1, _, distanceM) in samples.sortedBy { it.sequence }) {
+            sessionState = sessionState1
             if (sessionState != SessionState.IN_PROGRESS.code) current = null
             if (sessionState != SessionState.IN_PROGRESS.code ||
-                sample.workoutId != workout.id ||
-                sample.timestampEpochMs !in workout.startedAtEpochMs..endAt
+                workoutId != workout.id ||
+                timestampEpochMs !in workout.startedAtEpochMs..endAt
             ) continue
-            val distance = sample.distanceM?.takeIf { it.isFinite() && it >= 0 } ?: continue
+            val distance = distanceM?.takeIf { it.isFinite() && it >= 0 } ?: continue
             val points = current ?: mutableListOf<DistancePoint>().also {
                 stretches += it
                 current = it
             }
             val last = points.lastOrNull()
-            if (last == null || (distance >= last.meters && sample.timestampEpochMs > last.timestamp)) {
-                points += DistancePoint(sample.timestampEpochMs, sample.offsetS, distance)
+            if (last == null || (distance >= last.meters && timestampEpochMs > last.timestamp)) {
+                points += DistancePoint(timestampEpochMs, offsetS, distance)
             }
         }
         return stretches.flatMap(::windows)

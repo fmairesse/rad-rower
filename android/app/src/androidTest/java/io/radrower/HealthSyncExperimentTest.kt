@@ -17,11 +17,8 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
-import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
-import kotlin.math.cos
-import kotlin.math.roundToLong
 
 /**
  * Run with argument `runExperiment=true` to save records on the device:

@@ -19,6 +19,7 @@ import org.junit.Assume.assumeTrue
 import org.junit.runner.RunWith
 import org.junit.Test
 import java.util.UUID
+import kotlin.time.Duration.Companion.milliseconds
 
 @RunWith(AndroidJUnit4::class)
 class HealthConnectExportTest {
@@ -209,8 +210,8 @@ class HealthConnectExportTest {
         dao.upsertWorkout(workout)
         try {
             WorkoutExportWorker.enqueue(context, workout.id)
-            withTimeout(60_000) {
-                while (dao.workout(workout.id)?.exported != true) delay(100)
+            withTimeout(60_000.milliseconds) {
+                while (dao.workout(workout.id)?.exported != true) delay(100.milliseconds)
             }
         } finally {
             WorkManager.getInstance(context).cancelUniqueWork("workout-export:${workout.id}").result.get()

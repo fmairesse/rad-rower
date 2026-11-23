@@ -113,10 +113,10 @@ class WorkoutPersistenceTest {
         for (i in 0 until entities.length()) {
             val entity = entities.getJSONObject(i)
             val table = entity.getString("tableName")
-            raw.execSQL(entity.getString("createSql").replace("\${TABLE_NAME}", table))
+            raw.execSQL(entity.getString("createSql").replace($$"${TABLE_NAME}", table))
             val indices = entity.optJSONArray("indices")
             for (j in 0 until (indices?.length() ?: 0)) {
-                raw.execSQL(indices!!.getJSONObject(j).getString("createSql").replace("\${TABLE_NAME}", table))
+                raw.execSQL(indices!!.getJSONObject(j).getString("createSql").replace($$"${TABLE_NAME}", table))
             }
         }
         val setup = schema.getJSONArray("setupQueries")
